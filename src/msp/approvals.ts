@@ -55,6 +55,44 @@ export interface ApprovalRequestParams {
   turnId: string;
   toolCallId: string;
   toolName?: string;
+  /** What the approval is for (host words). Display only; never a grant. */
+  subject?: ApprovalSubjectInfo;
+  /** The tool call's arguments as a string, usually JSON. Display fallback. */
+  rawArgs?: string;
+  /** The judge's escalation reason, one bounded display line. Display only. */
+  reviewerReason?: string;
+}
+
+/**
+ * Display projection of the MSP `ApprovalSubject`. The wire kind is open
+ * (`shell | fileAccess | network | unixSocket | process | tool | …`); only
+ * the fields the prompt can show are kept, and unknown kinds fall back to
+ * `rawArgs`. Nothing here authorizes anything.
+ */
+export interface ApprovalSubjectInfo {
+  kind: string;
+  host?: string;
+  port?: number;
+  protocol?: string;
+  command?: string;
+  path?: string;
+  access?: string;
+  target?: string;
+}
+
+function asApprovalSubject(value: unknown): ApprovalSubjectInfo | undefined {
+  if (typeof value !== "object" || value === null) return undefined;
+  const candidate = value as Record<string, unknown>;
+  if (typeof candidate.kind !== "string" || candidate.kind === "") return undefined;
+  const info: ApprovalSubjectInfo = { kind: candidate.kind };
+  if (typeof candidate.host === "string") info.host = candidate.host;
+  if (typeof candidate.port === "number" && Number.isFinite(candidate.port)) info.port = candidate.port;
+  if (typeof candidate.protocol === "string") info.protocol = candidate.protocol;
+  if (typeof candidate.command === "string") info.command = candidate.command;
+  if (typeof candidate.path === "string") info.path = candidate.path;
+  if (typeof candidate.access === "string") info.access = candidate.access;
+  if (typeof candidate.target === "string") info.target = candidate.target;
+  return info;
 }
 
 /**
@@ -99,6 +137,9 @@ function asApprovalRequestParams(value: unknown): ApprovalRequestParams | null {
     turnId: params.turnId,
     toolCallId: params.toolCallId,
     ...(typeof params.toolName === "string" ? { toolName: params.toolName } : {}),
+    ...(asApprovalSubject(params.subject) !== undefined ? { subject: asApprovalSubject(params.subject) } : {}),
+    ...(typeof params.rawArgs === "string" ? { rawArgs: params.rawArgs } : {}),
+    ...(typeof params.reviewerReason === "string" ? { reviewerReason: params.reviewerReason } : {}),
   };
 }
 
@@ -130,6 +171,8 @@ export interface ConversationalChoice {
   choiceId: string;
   label: string;
   scope: string;
+  /** Human-readable preview of what this choice grants; shown exactly as given. */
+  rulePreview?: string;
 }
 
 /**
@@ -148,7 +191,14 @@ export function conversationalChoices(availableChoices: readonly unknown[]): Con
     if (typeof candidate.choiceId !== "string") continue;
     if (typeof candidate.label !== "string" || candidate.label.trim() === "") continue;
     if (typeof candidate.scope !== "string") continue;
-    choices.push({ choiceId: candidate.choiceId, label: candidate.label, scope: candidate.scope });
+    choices.push({
+      choiceId: candidate.choiceId,
+      label: candidate.label,
+      scope: candidate.scope,
+      ...(typeof candidate.rulePreview === "string" && candidate.rulePreview.trim() !== ""
+        ? { rulePreview: candidate.rulePreview }
+        : {}),
+    });
   }
   if (choices.length > 0) return choices;
   for (const entry of availableChoices) {
@@ -164,6 +214,9 @@ export function conversationalChoices(availableChoices: readonly unknown[]): Con
       choiceId: candidate.choiceId,
       label: derived,
       scope: typeof candidate.scope === "string" ? candidate.scope : "",
+      ...(typeof candidate.rulePreview === "string" && candidate.rulePreview.trim() !== ""
+        ? { rulePreview: candidate.rulePreview }
+        : {}),
     });
   }
   return choices;
@@ -205,28 +258,89 @@ export function matchConversationalChoice<T extends { label: string }>(
   return matched;
 }
 
+/** Fold control characters and cap length so untrusted wire text stays one bounded display line. */
+function displayLine(value: string, cap: number): string {
+  const folded = value.replace(/[\u0000-\u001f\u007f-\u009f]+/g, " ").replace(/\s+/g, " ").trim();
+  return folded.length > cap ? `${folded.slice(0, cap)}…` : folded;
+}
+
+/**
+ * One display line naming what the approval is for, in the host's words.
+ * Known kinds render their subject fields; anything else falls back to the
+ * bounded raw arguments, as the MSP schema recommends for unrecognized
+ * kinds. Display only — never a grant, never auto-approval.
+ */
+export function describeApprovalSubject(
+  subject: ApprovalSubjectInfo | undefined,
+  rawArgs: string | undefined,
+): string | undefined {
+  if (subject !== undefined) {
+    switch (subject.kind) {
+      case "network":
+        if (subject.host !== undefined && subject.host !== "") {
+          const protocol = subject.protocol !== undefined && subject.protocol !== "" ? `${subject.protocol}://` : "";
+          const port = subject.port !== undefined ? `:${subject.port}` : "";
+          return `${protocol}${subject.host}${port}`;
+        }
+        break;
+      case "shell":
+        if (subject.command !== undefined && subject.command !== "") return subject.command;
+        break;
+      case "fileAccess":
+        if (subject.path !== undefined && subject.path !== "") {
+          return subject.access !== undefined && subject.access !== "" ? `${subject.access} ${subject.path}` : subject.path;
+        }
+        break;
+      case "unixSocket":
+        if (subject.path !== undefined && subject.path !== "") return subject.path;
+        break;
+      case "process":
+        if (subject.target !== undefined && subject.target !== "") return subject.target;
+        break;
+      default:
+        break;
+    }
+  }
+  return typeof rawArgs === "string" && rawArgs !== "" ? rawArgs : undefined;
+}
+
 /**
  * Render the choices verbatim as a lettered list with the reply contract.
  * Labeled as bridge text: the Muse transcript never sees this (the bridge
  * only forwards new user input), and the OpenCode side must not mistake it
- * for model output.
+ * for model output. When the host names a subject (destination, command,
+ * path), it is shown so distinct approvals never look like the same prompt
+ * repeated; each choice's `rulePreview` is shown exactly as given.
  */
 export function renderConversationalApprovalPrompt(input: {
   toolName?: string;
   choices: readonly ConversationalChoice[];
   attempt: number;
   received?: string;
+  subject?: ApprovalSubjectInfo;
+  rawArgs?: string;
+  reviewerReason?: string;
 }): string {
   const action = input.toolName ? `Muse wants to run \`${input.toolName}\`.` : "Muse wants to perform an action.";
-  const lines = input.choices.map((choice, index) =>
-    `${CHOICE_LETTERS[index] ?? "?"}. ${choice.label} (${choice.scope})`);
+  const lines = input.choices.map((choice, index) => {
+    const base = `${CHOICE_LETTERS[index] ?? "?"}. ${choice.label} (${choice.scope})`;
+    return choice.rulePreview !== undefined ? `${base}\n   ${displayLine(choice.rulePreview, 300)}` : base;
+  });
   const contract = "Reply with one option (letter, number, or name). Anything else is asked once more, then denied.";
   const header = `**Approval needed** (opencode-muse bridge message, not the model): ${action}`;
+  const target = describeApprovalSubject(input.subject, input.rawArgs);
+  const context = [
+    ...(target !== undefined ? [`Target: ${displayLine(target, 300)}`] : []),
+    ...(input.reviewerReason !== undefined && input.reviewerReason.trim() !== ""
+      ? [`Reviewer: ${displayLine(input.reviewerReason, 200)}`]
+      : []),
+  ];
+  const body = [...context, ...lines].join("\n");
   if (input.attempt > 0 && input.received !== undefined) {
     const quoted = input.received.length > 200 ? `${input.received.slice(0, 200)}…` : input.received;
-    return `${header}\nI didn't understand "${quoted}" — reply with one of:\n${lines.join("\n")}\n${contract}`;
+    return `${header}\nI didn't understand "${quoted}" — reply with one of:\n${body}\n${contract}`;
   }
-  return `${header}\n${lines.join("\n")}\n${contract}`;
+  return `${header}\n${body}\n${contract}`;
 }
 
 /**
@@ -325,6 +439,9 @@ export class ApprovalExchange {
     requirementId: string;
     choices: ConversationalChoice[];
     toolName?: string;
+    subject?: ApprovalSubjectInfo;
+    rawArgs?: string;
+    reviewerReason?: string;
     turnId: string;
   }> {
     const described: Array<{
@@ -332,6 +449,9 @@ export class ApprovalExchange {
       requirementId: string;
       choices: ConversationalChoice[];
       toolName?: string;
+      subject?: ApprovalSubjectInfo;
+      rawArgs?: string;
+      reviewerReason?: string;
       turnId: string;
     }> = [];
     for (const pending of this.pending.values()) {
@@ -344,6 +464,9 @@ export class ApprovalExchange {
         requirementId: latestKey,
         choices: conversationalChoices(latest.params.availableChoices),
         ...(typeof latest.params.toolName === "string" ? { toolName: latest.params.toolName } : {}),
+        ...(latest.params.subject !== undefined ? { subject: latest.params.subject } : {}),
+        ...(latest.params.rawArgs !== undefined ? { rawArgs: latest.params.rawArgs } : {}),
+        ...(latest.params.reviewerReason !== undefined ? { reviewerReason: latest.params.reviewerReason } : {}),
         turnId: latest.params.turnId,
       });
     }
