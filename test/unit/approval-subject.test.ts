@@ -135,6 +135,21 @@ describe("Approval subject rendering", () => {
     expect(targetLine).not.toContain("\u0000");
   });
 
+  test("subject.formatScalarsAreFoldedToo", () => {
+    const text = renderConversationalApprovalPrompt({
+      choices: choices(),
+      attempt: 0,
+      subject: { kind: "shell", command: "echo a\u2028b\u2029c\u202ed\ufeffe" },
+    });
+    const targetLine = text.split("\n").find((line) => line.startsWith("Target:"));
+    expect(targetLine).toBeDefined();
+    expect(targetLine).toContain("echo a b c d e");
+    expect(targetLine).not.toContain("\u2028");
+    expect(targetLine).not.toContain("\u2029");
+    expect(targetLine).not.toContain("\u202e");
+    expect(targetLine).not.toContain("\ufeff");
+  });
+
   test("subject.longValuesAreCapped", () => {
     const long = "x".repeat(2000);
     const text = renderConversationalApprovalPrompt({

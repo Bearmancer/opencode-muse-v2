@@ -129,6 +129,7 @@ function asApprovalRequestParams(value: unknown): ApprovalRequestParams | null {
   if (typeof params.sessionId !== "string") return null;
   if (typeof params.turnId !== "string") return null;
   if (typeof params.toolCallId !== "string") return null;
+  const subject = asApprovalSubject(params.subject);
   return {
     approvalId: params.approvalId,
     currentRequirementId: params.currentRequirementId as string | ApprovalRequirementId,
@@ -137,7 +138,7 @@ function asApprovalRequestParams(value: unknown): ApprovalRequestParams | null {
     turnId: params.turnId,
     toolCallId: params.toolCallId,
     ...(typeof params.toolName === "string" ? { toolName: params.toolName } : {}),
-    ...(asApprovalSubject(params.subject) !== undefined ? { subject: asApprovalSubject(params.subject) } : {}),
+    ...(subject !== undefined ? { subject } : {}),
     ...(typeof params.rawArgs === "string" ? { rawArgs: params.rawArgs } : {}),
     ...(typeof params.reviewerReason === "string" ? { reviewerReason: params.reviewerReason } : {}),
   };
@@ -171,7 +172,7 @@ export interface ConversationalChoice {
   choiceId: string;
   label: string;
   scope: string;
-  /** Human-readable preview of what this choice grants; shown exactly as given. */
+  /** Human-readable preview of what this choice grants; shown verbatim apart from control/format-scalar folding and a length cap. */
   rulePreview?: string;
 }
 
@@ -258,9 +259,15 @@ export function matchConversationalChoice<T extends { label: string }>(
   return matched;
 }
 
-/** Fold control characters and cap length so untrusted wire text stays one bounded display line. */
+/**
+ * Fold control and format scalars (C0/C1, line separators, bidi overrides,
+ * BOM) and cap length so untrusted wire text stays one bounded display line.
+ */
 function displayLine(value: string, cap: number): string {
-  const folded = value.replace(/[\u0000-\u001f\u007f-\u009f]+/g, " ").replace(/\s+/g, " ").trim();
+  const folded = value
+    .replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029\u200e\u200f\u202a-\u202e\u2066-\u2069\ufeff]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
   return folded.length > cap ? `${folded.slice(0, cap)}…` : folded;
 }
 
@@ -310,7 +317,8 @@ export function describeApprovalSubject(
  * only forwards new user input), and the OpenCode side must not mistake it
  * for model output. When the host names a subject (destination, command,
  * path), it is shown so distinct approvals never look like the same prompt
- * repeated; each choice's `rulePreview` is shown exactly as given.
+ * repeated; each choice's `rulePreview` is shown verbatim apart from
+ * control/format-scalar folding and a length cap.
  */
 export function renderConversationalApprovalPrompt(input: {
   toolName?: string;

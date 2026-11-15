@@ -45,9 +45,9 @@ ID: opencode-muse` and mark it failed (observed on 2.2.5).
 
 The locally packed package passed provider discovery and a text-turn smoke
 test. Muse models and a text turn were also confirmed in OpenChamber after
-restarting it. Verified Muse CLI versions are 1.4.12 through 1.4.20;
-the 1.4.14 SDK pin matches the 1.4.14 CLI fingerprint exactly, and newer
-CLIs (1.4.20 verified) start under the recorded fingerprint warning. See
+restarting it. Verified Muse CLI versions are 1.4.12, 1.4.13, 1.4.14, and
+1.4.20; the 1.4.14 SDK pin matches the 1.4.14 CLI fingerprint exactly, and
+newer CLIs (1.4.20 verified) start under the recorded fingerprint warning. See
 [#21](https://github.com/pgquiles/opencode-muse/issues/21).
 
 ## Authentication
