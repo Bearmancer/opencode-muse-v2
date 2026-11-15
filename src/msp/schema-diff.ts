@@ -1,47 +1,33 @@
 import { createHash } from "node:crypto";
 
-/**
- * Offline schema-evolution check for policy #21.
- *
- * Compares MSP stable-schema snapshots and classifies the delta on the
- * protocol surfaces this plugin actually uses. Additive growth passes with
- * notes; removals, new required fields, dropped properties, or envelope
- * version bumps on the curated surface fail closed for human review.
- *
- * Failing closed on uncertainty is deliberate: a false positive costs a
- * human classification pass, while a false negative ships against a
- * contract the bridge was never tested with.
- */
+
 
 export const SCHEMA_SECTIONS = ["methods", "requests", "notifications", "errors", "capabilities"] as const;
 export type SchemaSection = (typeof SCHEMA_SECTIONS)[number];
 
-/** Methods the bridge sends. Each name verified at a call site in src (manager, provider, language-model). */
+
 export const CURATED_METHODS: readonly string[] = [
-  "model/list", // src/provider.ts catalog fetch
-  "session/start", // src/session/manager.ts resolveSession
-  "session/resume", // src/session/manager.ts restart recovery
-  "session/setModel", // src/session/manager.ts + src/model/language-model.ts selection routing
-  "turn/start", // src/model/language-model.ts agent turns
-  "turn/interrupt", // src/model/language-model.ts abort path
-  "turn/unqueue", // src/model/language-model.ts abort path
-  "media/upload", // src/model/language-model.ts video uploads
-  "view/subscribe", // src/msp/host.ts cursor replay via MspClient
-  "view/page", // src/model/language-model.ts view/gap recovery
-  "userInput/answer", // src/msp/host.ts answers conversational verdicts
-  "userInput/cancel", // src/msp/host.ts fails conversational verdicts closed
+  "model/list", 
+  "session/start", 
+  "session/resume", 
+  "session/setModel", 
+  "turn/start", 
+  "turn/interrupt", 
+  "turn/unqueue", 
+  "media/upload", 
+  "view/subscribe", 
+  "view/page", 
+  "userInput/answer", 
+  "userInput/cancel", 
 ];
 
-/**
- * Server-to-client requests the bridge parks for a conversational verdict
- * instead of failing with method-not-found (no fabricated answers).
- */
+
 export const CURATED_REQUESTS: readonly string[] = [
-  "approval/request", // src/msp/host.ts parks for a conversational verdict
-  "userInput/request", // src/msp/host.ts parks for a conversational verdict
+  "approval/request", 
+  "userInput/request", 
 ];
 
-/** Notifications the bridge consumes in src/model/stream.ts and src/model/language-model.ts. */
+
 export const CURATED_NOTIFICATIONS: readonly string[] = [
   "item/started",
   "item/delta",
@@ -80,7 +66,7 @@ export interface SchemaSnapshot {
   surface: Record<SchemaSection, string[] | null>;
   member_digests?: Record<string, Record<string, string>>;
   defs?: Record<string, DefRecord>;
-  /** Legacy v1 field: whole-section $defs digest only. Superseded by defs. */
+  
   defs_digests?: Record<string, string>;
   sections_digest: Record<string, string>;
 }
@@ -124,7 +110,7 @@ function stringArray(value: unknown): string[] | null {
   return [...value].sort();
 }
 
-/** Stable name for one section member, or null when it cannot be named. */
+
 function memberName(section: SchemaSection, entry: unknown): string | null {
   if (typeof entry === "string") return entry;
   if (entry !== null && typeof entry === "object") {
@@ -179,7 +165,7 @@ function defRecord(body: unknown): DefRecord | null {
   };
 }
 
-/** Builds the ledger snapshot for one offline CLI schema export. */
+
 export function snapshotExport(cliVersion: string, provenance: string, exp: SchemaExport): SchemaSnapshot {
   if (typeof exp?.manifest?.fingerprint !== "string" || typeof exp?.manifest?.schemaVersion !== "number") {
     throw new Error("schema-diff: export manifest must carry a fingerprint string and numeric schemaVersion");
@@ -222,7 +208,7 @@ export function snapshotExport(cliVersion: string, provenance: string, exp: Sche
   };
 }
 
-/** Collects `#/$defs/<Name>` targets reachable from roots over new-side bodies. */
+
 export function collectRefs(roots: Record<string, unknown>, defs: Record<string, unknown>): Set<string> {
   const seen = new Set<string>();
   const visit = (value: unknown): void => {
@@ -269,14 +255,11 @@ function requireSurface(snap: SchemaSnapshot, which: "old" | "new"): void {
 }
 
 export interface ClassifyOptions {
-  /**
-   * New-side bodies for reachability attribution: { members: name->body, defs: name->body }.
-   * When absent (snapshot-vs-snapshot), changed/removed defs fall back to conservative rules.
-   */
+  
   newBodies?: { members: Record<string, unknown>; defs: Record<string, unknown> };
 }
 
-/** Classifies old-vs-new snapshots. Breaking findings fail closed for human review. */
+
 export function classifySnapshots(oldSnap: SchemaSnapshot, newSnap: SchemaSnapshot, options: ClassifyOptions = {}): Classification {
   requireSurface(oldSnap, "old");
   requireSurface(newSnap, "new");
@@ -330,7 +313,7 @@ export function classifySnapshots(oldSnap: SchemaSnapshot, newSnap: SchemaSnapsh
       }
     }
   }
-  // Reachability over new-side bodies scopes nested def changes to what the bridge can observe.
+  
   let reachable: Set<string> | null = null;
   if (options.newBodies) {
     const roots: Record<string, unknown> = {};

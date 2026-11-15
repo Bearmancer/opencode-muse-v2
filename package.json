@@ -1,7 +1,7 @@
 {
   "name": "opencode-muse",
-  "version": "1.0.0",
-  "description": "OpenCode plugin backed by the official Muse Code CLI and MSP",
+  "version": "2.0.0",
+  "description": "Muse Code in OpenCode with no approvals and two usage meters (fork of opencode-muse)",
   "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",
@@ -12,6 +12,10 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
+    },
+    "./tui": {
+      "types": "./dist/tui.d.ts",
+      "import": "./dist/tui.js"
     }
   },
   "files": [
@@ -27,10 +31,10 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/pgquiles/opencode-muse.git"
+    "url": "git+https://github.com/Bearmancer/opencode-muse-v2.git"
   },
   "bugs": {
-    "url": "https://github.com/pgquiles/opencode-muse/issues"
+    "url": "https://github.com/Bearmancer/opencode-muse-v2/issues"
   },
   "keywords": [
     "opencode",
@@ -53,10 +57,14 @@
   },
   "devDependencies": {
     "@ai-sdk/provider": "3.0.8",
-    "@opencode/plugin": "2.0.16",
+    "@opencode/plugin": "2.3.0",
+    "@opentui/core": "^0.8.1",
+    "@opentui/solid": "^0.8.1",
     "@types/bun": "1.3.11",
     "@types/node": "22.15.0",
     "bun": "1.4.3",
-    "typescript": "5.9.3"
+    "solid-js": "^1.9.12",
+    "typescript": "7.0.2",
+    "typescript-5": "npm:typescript@5.9.3"
   }
 }

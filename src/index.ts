@@ -1,7 +1,7 @@
 import type { Plugin } from "@opencode/plugin";
 import { createProviderPlugin } from "./provider.js";
 
-/** Factory hook required by OpenCode's bundled `aisdk:file://` dynamic provider. */
+
 export function createMuse() {
   return {
     languageModel(_modelID: string) {

@@ -2,11 +2,7 @@ import { expect, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { readRepositoryJson, repositoryPath } from "./helpers.ts";
 import "./unit/contributor.test.ts";
-import "./unit/conversational-approval.test.ts";
-import "./unit/conversational-userinput.test.ts";
 import "./unit/msp-client.test.ts";
-import "./unit/msp-approval-exchange.test.ts";
-import "./unit/msp-approvals.test.ts";
 import "./unit/msp-host.test.ts";
 import "./unit/msp-schema-diff.test.ts";
 import "./unit/session-registry.test.ts";
@@ -16,7 +12,6 @@ import "./integration/provider-registration.test.ts";
 import "./unit/request-context.test.ts";
 import "./unit/agent-context.test.ts";
 import "./unit/prompt.test.ts";
-import "./unit/recovery.test.ts";
 import "./unit/audio-transcribe.test.ts";
 import "./unit/pdf-staging.test.ts";
 import "./unit/worktree-sessions.test.ts";
@@ -32,6 +27,7 @@ import "./integration/turn-bridge.test.ts";
 import "./integration/session-recovery.test.ts";
 import "./integration/rewind-fork.test.ts";
 import "./unit/provider-list-smoke.test.ts";
+import "./unit/usage.test.ts";
 
 interface PackageMetadata {
   exports?: {

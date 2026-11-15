@@ -87,8 +87,8 @@ describe("loopback MCP bridge", () => {
       }
       expect(server.pendingCount()).toBe(0);
       await expect(delivered).rejects.toThrow(/timed out/);
-      // The corpse must never surface as a live call, and a late duplicate
-      // must read as settled (skip), not unknown (throw).
+      
+      
       expect(server.takeParked()).toBeUndefined();
       expect(server.wasResolved("call_slow")).toBe(true);
       expect(server.resolve("call_slow", { text: "late" })).toBe(false);

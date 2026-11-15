@@ -19,8 +19,6 @@ import {
 } from "../errors.js";
 import { MspClient, type MspConnectionLike, type MspNotification, type MspServerRequest } from "./client.js";
 import { museChildEnv } from "./contributor.js";
-import { ApprovalExchange, conversationalChoices, selectApprovalChoiceId, type ApprovalVerdict } from "./approvals.js";
-import { UserInputExchange, validUserInputAnswers, type UserInputAnswer, type UserInputVerdict } from "./user-input.js";
 
 export interface MspHostRuntime {
   connection: MspConnectionLike;
@@ -46,9 +44,6 @@ export interface MspHostOptions {
   clientInfo?: { name: string; version: string };
   capabilities?: Parameters<MspHandshake["initialize"]>[0]["capabilities"];
   onServerRequest?: (request: MspServerRequest) => Promise<Record<string, unknown>>;
-  approvalTimeoutMs?: number;
-  onApprovalParked?: (info: { museTurnId: string; approvalId: string }) => void;
-  onApprovalUnparked?: (approvalId: string) => void;
 }
 
 export interface MspHostDependencies {
@@ -87,13 +82,13 @@ function sanitizeExit(value: unknown): MspHostExit {
   if (typeof record.exitCode === "number" || record.exitCode === null) safe.exitCode = record.exitCode;
   if (typeof record.exitSignal === "string" || record.exitSignal === null) safe.exitSignal = record.exitSignal;
   if (typeof record.retry === "string") safe.retry = record.retry;
-  // Deliberately omit stderrTail, raw messages, and arbitrary child properties.
+  
   return safe;
 }
 
 const SCHEMA_FINGERPRINT_PATTERN = /^sha256:[0-9a-f]{64}$/;
 
-/** Envelope schema versions this plugin speaks. The SDK documents version 1 as long-lived. */
+
 const SUPPORTED_SCHEMA_VERSION = 1;
 
 function readSchemaInfo(value: unknown): { fingerprint: string; version?: unknown } | undefined {
@@ -119,25 +114,19 @@ async function closeQuietly(close: () => Promise<unknown>): Promise<void> {
   try {
     await close();
   } catch {
-    // Shutdown diagnostics may contain arbitrary CLI stderr; do not log them.
+    
   }
 }
 
-/** Owns one muse serve child and one MSP connection for one OpenCode session. */
+
 export class MspHost {
   readonly client: MspClient;
   readonly initializeResult: Record<string, unknown>;
-  /** Set when the served schema fingerprint differs from the SDK pin. Warns, never blocks. */
+  
   readonly fingerprintWarning?: FingerprintWarning;
-  /** Per-session latch for approval round trips; settled by OpenCode verdicts. */
-  readonly approvals: ApprovalExchange;
-  /** Per-session latch for structured userInput round trips; same discipline. */
-  readonly userInput: UserInputExchange;
   readonly exited: Promise<MspHostExit>;
   private state: "open" | "closing" | "closed" = "open";
   private closePromise: Promise<void> | undefined;
-  private readonly onApprovalParked: MspHostOptions["onApprovalParked"];
-  private readonly onApprovalUnparked: MspHostOptions["onApprovalUnparked"];
 
   private constructor(
     private readonly runtime: MspHostRuntime,
@@ -146,10 +135,6 @@ export class MspHost {
   ) {
     this.initializeResult = runtime.initializeResult;
     this.fingerprintWarning = fingerprintWarning;
-    this.approvals = new ApprovalExchange({ timeoutMs: options.approvalTimeoutMs ?? 10 * 60 * 1000 });
-    this.userInput = new UserInputExchange({ timeoutMs: options.approvalTimeoutMs ?? 10 * 60 * 1000 });
-    this.onApprovalParked = options.onApprovalParked;
-    this.onApprovalUnparked = options.onApprovalUnparked;
     const customServerRequest = options.onServerRequest;
     this.client = new MspClient(runtime.connection, {
       commandTimeoutMs: options.commandTimeoutMs,
@@ -184,7 +169,7 @@ export class MspHost {
       args: options.args,
       cwd: options.cwd,
       env: museChildEnv(options.env ?? process.env),
-      // No stderr callback: the SDK's bounded diagnostic tail is never forwarded to plugin logs.
+      
       shutdownTimeoutMs: options.shutdownTimeoutMs ?? 30_000,
     };
     let handshake: MspHandshakeLike;
@@ -265,8 +250,8 @@ export class MspHost {
   private async handleServerRequest(request: MspServerRequest): Promise<Record<string, unknown>> {
     if (request.method === "approval/request") return this.handleApprovalRequest(request.params);
     if (request.method === "userInput/request") return this.handleUserInputRequest(request.params);
-    // Mirror the SDK's own client: answered methods ack with {}; every other
-    // server-request method keeps the bare-connection -32601.
+    
+    
     throw new MspError({
       code: -32601,
       message: `method not found: ${request.method}`,
@@ -275,96 +260,51 @@ export class MspHost {
   }
 
   private async handleApprovalRequest(params: Record<string, unknown> | undefined): Promise<Record<string, unknown>> {
-    let verdict: ApprovalVerdict;
-    try {
-      const pending = this.approvals.requestApproval(params);
-      const raw = (params ?? {}) as { approvalId?: unknown; turnId?: unknown };
-      if (
-        typeof raw.approvalId === "string" && typeof raw.turnId === "string"
-        && this.approvals.pendingApprovalIds().includes(raw.approvalId)
-      ) {
-        this.onApprovalParked?.({ museTurnId: raw.turnId, approvalId: raw.approvalId });
-      }
-      verdict = await pending;
-    } catch {
-      // Unroutable (malformed) approval requests are dropped like the SDK
-      // drops them; the server holds the turn under its own default-deny.
+    const raw = (params ?? {}) as {
+      approvalId?: unknown;
+      sessionId?: unknown;
+      currentRequirementId?: unknown;
+      availableChoices?: unknown;
+    };
+    if (
+      typeof raw.approvalId !== "string"
+      || typeof raw.sessionId !== "string"
+      || !Array.isArray(raw.availableChoices)
+    ) {
       return {};
     }
-    if ("alreadyDecided" in verdict) return {};
-    const stage = verdict.params;
-    // A conversational verdict names the exact offered choice; validate it
-    // against what Muse actually offered before deciding. Anything else —
-    // including a stale or invented id — falls through to the interrupt path.
-    const choiceId = "choiceId" in verdict
-      ? (conversationalChoices(stage.availableChoices).some((choice) => choice.choiceId === verdict.choiceId)
-        ? verdict.choiceId
-        : null)
-      : (selectApprovalChoiceId(stage.availableChoices, verdict.approved)
-        ?? (verdict.approved ? selectApprovalChoiceId(stage.availableChoices, false) : null));
-    try {
-      if (choiceId !== null) {
+    const approve = raw.availableChoices.find((entry): entry is { choiceId: string } =>
+      typeof entry === "object" && entry !== null
+      && (entry as Record<string, unknown>).decision === "approve"
+      && typeof (entry as Record<string, unknown>).choiceId === "string",
+    );
+    if (approve !== undefined) {
+      try {
         await this.command("approval/decide", {
           commandId: this.client.mintCommandId(),
-          sessionId: stage.sessionId,
-          approvalId: stage.approvalId,
-          requirementId: stage.currentRequirementId,
-          choiceId,
+          sessionId: raw.sessionId,
+          approvalId: raw.approvalId,
+          requirementId: raw.currentRequirementId,
+          choiceId: approve.choiceId,
         });
-      } else {
-        await this.command("turn/interrupt", {
-          commandId: this.client.mintCommandId(),
-          sessionId: stage.sessionId,
-          turnId: stage.turnId,
-          retract: true,
-        });
+      } catch {
       }
-    } catch {
-      // The turn may already be gone (cancel raced the verdict). Mark the
-      // stage so a re-sent request does not re-park a dead round trip; the
-      // request plane is still acked.
     }
-    this.approvals.markDecided(stage.approvalId, stage.currentRequirementId);
-    this.onApprovalUnparked?.(stage.approvalId);
     return {};
   }
 
   private async handleUserInputRequest(params: Record<string, unknown> | undefined): Promise<Record<string, unknown>> {
-    let verdict: UserInputVerdict;
+    const raw = (params ?? {}) as { sessionId?: unknown; userInputId?: unknown };
+    if (typeof raw.sessionId !== "string" || typeof raw.userInputId !== "string") return {};
     try {
-      verdict = await this.userInput.requestUserInput(params);
+      await this.command("userInput/cancel", {
+        commandId: this.client.mintCommandId(),
+        sessionId: raw.sessionId,
+        userInputId: raw.userInputId,
+        reason: "cancelled",
+      });
     } catch {
-      // Unroutable (malformed) requests are dropped like the SDK drops them;
-      // the server holds the turn under its own default.
-      return {};
     }
-    if ("alreadyDecided" in verdict) return {};
-    const stage = verdict.params;
-    // Conversational answers name exact offered labels; re-validate before
-    // sending. Anything else — invented labels, timeouts, explicit cancels —
-    // fails closed via userInput/cancel rather than answering.
-    try {
-      if ("answers" in verdict && validUserInputAnswers(stage.questions, verdict.answers)) {
-        await this.command("userInput/answer", {
-          commandId: this.client.mintCommandId(),
-          sessionId: stage.sessionId,
-          userInputId: stage.userInputId,
-          answers: verdict.answers,
-        });
-      } else {
-        await this.command("userInput/cancel", {
-          commandId: this.client.mintCommandId(),
-          sessionId: stage.sessionId,
-          userInputId: stage.userInputId,
-          reason: "timedOut" in verdict ? "conversational answer timed out" : "cancelled",
-        });
-      }
-    } catch {
-      // The turn may already be gone (cancel raced the verdict). Mark the
-      // stage so a re-sent request does not re-park a dead round trip; the
-      // request plane is still acked.
-    }
-    this.userInput.markDecided(stage.userInputId);
     return {};
   }
 

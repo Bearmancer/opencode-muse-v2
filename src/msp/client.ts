@@ -143,7 +143,7 @@ function safeRequestFailure(method: string, error: unknown): Error {
   return new MspTransportError(method);
 }
 
-/** Thin typed facade over the SDK connection; it never logs or retains wire payloads. */
+
 export class MspClient {
   private readonly subscribers = new Set<{ sessionId: string; queue: AsyncQueue<MspNotification> }>();
   private closePromise: Promise<void> | undefined;
@@ -239,7 +239,7 @@ export class MspClient {
     }) as Promise<TResult>;
   }
 
-  /** Start/resume already attach at their returned head; `after` explicitly requests replay. */
+  
   async *subscribe(sessionId: string, after?: string, signal?: AbortSignal): AsyncIterable<MspNotification> {
     this.assertOpen();
     if (!sessionId) throw new MspProtocolError("view/subscribe");
@@ -260,7 +260,7 @@ export class MspClient {
     }
   }
 
-  /** Mark subscriptions ended after the owning process wrapper has shut down. */
+  
   dispose(): void {
     if (this.closed) return;
     this.closed = true;

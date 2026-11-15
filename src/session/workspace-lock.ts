@@ -91,7 +91,7 @@ function syncDirectory(path: string): void {
     descriptor = openSync(path, "r");
     fsyncSync(descriptor);
   } catch {
-    // Directory fsync is not available on every supported platform.
+    
   } finally {
     if (descriptor !== undefined) closeSync(descriptor);
   }
@@ -155,13 +155,13 @@ export class WorkspaceLock {
       closeSync(descriptor);
       descriptor = undefined;
       linkSync(temporary, path);
-      try { unlinkSync(temporary); } catch { /* the private temporary hard link is safe to clean later */ }
+      try { unlinkSync(temporary); } catch {  }
       syncDirectory(dirname(path));
     } catch (error) {
       if (descriptor !== undefined) {
-        try { closeSync(descriptor); } catch { /* preserve the original failure */ }
+        try { closeSync(descriptor); } catch {  }
       }
-      try { unlinkSync(temporary); } catch { /* best-effort temp cleanup */ }
+      try { unlinkSync(temporary); } catch {  }
       throw error;
     }
   }
@@ -178,7 +178,7 @@ export class WorkspaceLock {
     }
   }
 
-  /** Synchronous recheck narrows the stale-owner race before reclaiming its lock. */
+  
   private removeIfUnchanged(path: string, observed: LockRecord): boolean {
     const claimPath = `${path}.reclaim`;
     const claimToken = this.createOwnerToken();
@@ -192,18 +192,18 @@ export class WorkspaceLock {
       closeSync(claimDescriptor);
       claimDescriptor = undefined;
       linkSync(temporaryClaimPath, claimPath);
-      try { unlinkSync(temporaryClaimPath); } catch { /* the private temporary hard link is safe to clean later */ }
+      try { unlinkSync(temporaryClaimPath); } catch {  }
       syncDirectory(dirname(path));
     } catch (error) {
       if (claimDescriptor !== undefined) {
-        try { closeSync(claimDescriptor); } catch { /* preserve the original failure */ }
+        try { closeSync(claimDescriptor); } catch {  }
       }
-      try { unlinkSync(temporaryClaimPath); } catch { /* best-effort temporary cleanup */ }
+      try { unlinkSync(temporaryClaimPath); } catch {  }
       if (!isExistsError(error)) throw new WorkspaceLockCorruptError();
       const existingClaim = this.readRecoveryClaim(claimPath);
       if (this.isProcessAlive(existingClaim.pid)) throw new WorkspaceBusyError();
-      // A crashed recovery owner cannot be safely removed by a competing process;
-      // fail closed rather than risk deleting a newly acquired workspace lock.
+      
+      
       throw new WorkspaceLockCorruptError();
     }
 
@@ -226,7 +226,7 @@ export class WorkspaceLock {
         const currentClaim = this.readRecoveryClaim(claimPath);
         if (currentClaim.ownerToken === claimToken && currentClaim.pid === process.pid) unlinkSync(claimPath);
       } catch {
-        // Do not remove a malformed or replaced recovery claim.
+        
       }
     }
   }

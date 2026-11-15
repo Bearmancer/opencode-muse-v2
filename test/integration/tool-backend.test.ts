@@ -174,9 +174,9 @@ describe("opencode backend turn flow", () => {
       async recordTurnCompleted() {},
       async commitTranscriptFingerprints() {},
       async release() {},
-      // Sync check sees nothing; the watcher then peeks call A while the
-      // destructive take drains call B. The take wins: emitting the peeked
-      // call would duplicate it when B is taken next.
+      
+      
+      
       takeParkedToolCall() {
         takes += 1;
         if (takes < 2) return undefined;
@@ -331,8 +331,8 @@ describe("opencode backend turn flow", () => {
       museSessionId: "ses_muse_old",
       toolBackend: "opencode",
       activeTurnId: "turn_live",
-      // The manager arms a steer for every re-entry on a live turn; a
-      // tool-result re-invocation must attach anyway, never steer.
+      
+      
       steerExpectedTurnId: "turn_live",
       previousTranscriptFingerprints: stored,
       contextAllowlist: [],
@@ -427,8 +427,8 @@ describe("opencode backend turn flow", () => {
       async commitTranscriptFingerprints() {},
       async release() {},
       hasParkedToolCall: () => false,
-      // Late duplicate for a settled call (timed out or already resolved):
-      // skipped, never thrown, and the live turn still drains.
+      
+      
       resolveParkedToolCall: () => "already-resolved",
       takeParkedToolCall: () => undefined,
     };

@@ -61,9 +61,9 @@ describe("opencode backend host config", () => {
     const userDir = join(root, "empty-muse");
     mkdirSync(userDir, { recursive: true });
 
-    // No per-turn tool names exist at config-write time, so the default must
-    // admit the whole loopback namespace: an empty allowlist gates every
-    // tool off and the model can only narrate intent.
+    
+    
+    
     const xdg = writeHostConfig(root, "ses_test_ns", { authSourceDir: userDir });
 
     expect(JSON.parse(readFileSync(join(xdg, "muse", "settings.json"), "utf8")).run.toolset)

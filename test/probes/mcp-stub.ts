@@ -1,10 +1,10 @@
-// Minimal stateless streamable-HTTP MCP server for the host-override probe
-// (#42). It serves two tools (read, bash) so `run.toolset` has something to
-// select, parks each tools/call until the probe driver writes the result
-// file, then returns it. Coordination: startMcpStub(callsDir, token) returns
-// the server URL; the stub appends each call to calls.jsonl and polls for
-// <callId>.json (120s cap). Settings shape mirrors pi-muse-subscription's
-// proven streamable_http host config. Nothing here is product code.
+
+
+
+
+
+
+
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { join } from "node:path";
@@ -50,7 +50,7 @@ export async function startMcpStub(callsDir: string, token: string): Promise<Mcp
   }
 
   async function route(message: any): Promise<Json | undefined> {
-    if (message.id === undefined || message.id === null) return undefined; // notification
+    if (message.id === undefined || message.id === null) return undefined; 
     const { id, method, params } = message;
     switch (method) {
       case "initialize":

@@ -4,17 +4,11 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-/**
- * Audio attachments (#32). The pinned MSP turn schema has no audio part,
- * so attached clips are transcribed through the official
- * `muse voice transcribe` CLI and the transcript enters the turn as
- * declared text. Voice mode is included in every subscription plan;
- * the CLI owns authentication end to end.
- */
+
 
 export const TRANSCRIBE_BASE_TIMEOUT_MS = 60_000;
 
-/** Latency runs ~0.7x clip duration on the pinned CLI; triple it, floored at the base. */
+
 export function transcribeTimeoutMs(durationMs?: number): number {
   if (durationMs === undefined) return TRANSCRIBE_BASE_TIMEOUT_MS;
   return Math.max(TRANSCRIBE_BASE_TIMEOUT_MS, Math.ceil(durationMs * 3));
@@ -24,7 +18,7 @@ export type TranscribeFailureCode = "transcription-failed" | "transcription-time
 
 export type TranscribeOutcome = { ok: true; transcript: string } | { ok: false; code: TranscribeFailureCode };
 
-/** Sealed seam: prompt extraction calls this, never the CLI directly. */
+
 export type TranscribeAudio = (bytes: Uint8Array, mediaType: string) => Promise<TranscribeOutcome>;
 
 export interface TranscribeSpawnResult {
@@ -38,14 +32,14 @@ export type TranscribeSpawn = (
   museBin: string,
   clipPath: string,
   timeoutMs: number,
-  /** Sanitized child env; the default runner computes it from the process env. */
+  
   env?: NodeJS.ProcessEnv,
 ) => Promise<TranscribeSpawnResult>;
 
 export interface CliTranscriberOptions {
   museBin?: string;
   spawn?: TranscribeSpawn;
-  /** Escape hatch (tests); otherwise computed from the clip duration. */
+  
   timeoutMs?: number;
 }
 
@@ -73,7 +67,7 @@ function clipExtension(mediaType: string): string {
   }
 }
 
-/** PCM header duration only; anything else (mp3/ogg/containers) yields undefined. */
+
 export function wavDurationMs(bytes: Uint8Array): number | undefined {
   if (bytes.byteLength < 44) return undefined;
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
@@ -96,9 +90,9 @@ function defaultSpawn(
   env: NodeJS.ProcessEnv = museChildEnv(process.env),
 ): Promise<TranscribeSpawnResult> {
   return new Promise((resolve) => {
-    // The deadline is enforced by the timer below (not the spawn `timeout`
-    // option) so a kill is always recorded as a timeout, never as a bare
-    // null exit.
+    
+    
+    
     const child = spawn(museBin, ["voice", "transcribe", clipPath], { env });
     let stdout = "";
     let stderr = "";
@@ -133,8 +127,8 @@ export function createCliTranscriber(options: CliTranscriberOptions = {}): Trans
       const clipPath = join(directory, `clip${clipExtension(mediaType.toLowerCase())}`);
       await writeFile(clipPath, bytes);
       const timeoutMs = options.timeoutMs ?? transcribeTimeoutMs(wavDurationMs(bytes));
-      // The deadline is enforced here, not in the spawn: a custom runner
-      // may ignore timeoutMs, and only this race guarantees termination.
+      
+      
       let fireTimeout: () => void = () => {};
       const timeoutPromise = new Promise<TranscribeSpawnResult>((resolve) => {
         fireTimeout = () => resolve({ exit: null, stdout: "", stderr: "", timedOut: true });
@@ -153,7 +147,7 @@ export function createCliTranscriber(options: CliTranscriberOptions = {}): Trans
         const transcript = result.stdout.trim();
         return transcript ? { ok: true, transcript } : { ok: false, code: "no-speech-heard" };
       }
-      // Observed: exit 3 on unreadable input, exit 7 on wordless audio.
+      
       if (result.exit === 7) return { ok: false, code: "no-speech-heard" };
       return { ok: false, code: "transcription-failed" };
     } finally {

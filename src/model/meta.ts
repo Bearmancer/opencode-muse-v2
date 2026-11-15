@@ -60,7 +60,7 @@ function detectPromptKind(prompt: readonly PromptMessageLike[] | LanguageModelV3
   return undefined;
 }
 
-/** Prefer the correlated kind; prompt-shape fallback is intentionally narrow. */
+
 export function classifyMetaRequest(
   kind: string | undefined,
   prompt: readonly PromptMessageLike[] | LanguageModelV3Prompt,
@@ -76,7 +76,7 @@ export function classifyMetaRequest(
   return "unsupported-generate";
 }
 
-/** Local, zero-model-call title from the first user-authored message only. */
+
 export function makeLocalTitle(prompt: readonly PromptMessageLike[] | LanguageModelV3Prompt): string {
   const firstUser = promptMessages(prompt).find((message) => message.role === "user");
   const text = textFromContent(firstUser?.content).replace(/\s+/g, " ").trim();
@@ -127,10 +127,7 @@ function completeExchangePairs(messages: readonly DigestMessage[], initialIndex:
   return pairs;
 }
 
-/**
- * Deterministic local transcript digest. It is bookkeeping, not synthesis:
- * no tools, system prompts, hidden reasoning, or inferred decisions are added.
- */
+
 export function makeCompactionDigest(
   prompt: readonly PromptMessageLike[] | LanguageModelV3Prompt,
   maxOutputTokens?: number,

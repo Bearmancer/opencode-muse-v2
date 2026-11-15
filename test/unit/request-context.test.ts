@@ -99,10 +99,10 @@ describe("request context", () => {
       [MUSE_CONTEXT_HEADERS.providerID]: "muse",
       [MUSE_CONTEXT_HEADERS.variant]: variant,
     });
-    // "off" aliases "none"; this row offers no "none", so both land on minimal.
+    
     expect(readRequestContext({ headers: makeHeaders("off") }, index)).toMatchObject({ variant: "minimal", effort: "minimal" });
     expect(readRequestContext({ headers: makeHeaders("none") }, index)).toMatchObject({ variant: "minimal", effort: "minimal" });
-    // A default that names an unoffered tier falls back the same way.
+    
     const highDefault: MuseModelSelection = { ...selection, defaultReasoningEffort: "xhigh" };
     const highIndex = new Map([[modelId, highDefault]]);
     expect(readRequestContext({ headers: makeHeaders("default") }, highIndex)).toMatchObject({ variant: "minimal", effort: "minimal" });
@@ -143,9 +143,9 @@ describe("request context", () => {
   });
 
   test("context.treatsDefaultVariantWithoutADeclaredDefaultAsUnspecifiedEffort", () => {
-    // Ruling: OpenCode's "default" marker means the user chose no variant; when
-    // the Muse row declares no defaultReasoningEffort, the turn runs on Muse's
-    // own default effort instead of failing the OpenCode request loop.
+    
+    
+    
     const noDefault: MuseModelSelection = { ...selection };
     delete (noDefault as { defaultReasoningEffort?: string }).defaultReasoningEffort;
     const centeredIndex = new Map([[modelId, noDefault]]);

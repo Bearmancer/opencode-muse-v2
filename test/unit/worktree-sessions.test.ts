@@ -80,8 +80,6 @@ function managerAt(root: string, fake: FakeHost, experimentalApi: boolean | unde
       return {
         initializeResult: experimentalApi === undefined ? { sessionDurability: "durable" } : { sessionDurability: "durable", experimentalApi },
         mintCommandId: () => `018f4f17-9c2a-7c1a-a0fd-67a19db5d1${String(id++).padStart(2, "0")}`,
-        approvals: { pendingApprovalIds: () => [] },
-        userInput: {},
         async command(method: string, params: Record<string, unknown>) {
           calls.push({ method, params });
           if (method === "session/start") {
@@ -144,7 +142,7 @@ describe("post-v1 worktree sessions (#34)", () => {
     const starts = calls.filter((c) => c.method === "session/start");
     expect(starts).toHaveLength(2);
     expect(starts[1]!.params).not.toHaveProperty("worktree");
-    // The fallback is a new command, never an id reuse with changed payload.
+    
     expect(starts[1]!.params.commandId).not.toBe(starts[0]!.params.commandId);
     expect(session.worktree).toBeUndefined();
     expect(session.sessionNotices?.join("\n")).toContain("single-writer lock");
@@ -152,10 +150,10 @@ describe("post-v1 worktree sessions (#34)", () => {
   });
 
   test("worktree.unexpectedRejectionRetriesWithoutWorktree", async () => {
-    // Non-git checkouts, Subversion/Mercurial/plain directories, and
-    // untrusted workspaces surface under server-chosen kinds (e.g. the
-    // invalidParams seen on a fresh workspace): retry once without the
-    // worktree parameter and fall back with notice when that succeeds.
+    
+    
+    
+    
     const root = tempRoot();
     const directory = join(root, "project");
     mkdirSync(directory);
@@ -197,7 +195,6 @@ describe("post-v1 worktree sessions (#34)", () => {
     expect(starts[0]!.params).not.toHaveProperty("worktree");
     expect(calls.some((c) => c.method === "worktree/list")).toBe(false);
     expect(session.worktree).toBeUndefined();
-    expect(session.sessionNotices?.join("\n")).toContain("do not ask the user for permission in prose");
     expect(session.sessionNotices?.join("\n")).not.toContain("single-writer lock");
     await manager.close();
   });

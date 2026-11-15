@@ -353,8 +353,8 @@ describe("Muse LanguageModelV3 bridge", () => {
       expect(predicate()).toBe(true);
     };
 
-    // Call 1 starts the turn; calls 2 and 3 steer into it while it runs.
-    // Each submit proves that call already consumed the marker.
+    
+    
     const first = await model.doStream(callOptions());
     await waitFor(() => fake.commands.some((command) => command.method === "turn/start"));
     fake.session.steerExpectedTurnId = "turn-1";
@@ -369,8 +369,8 @@ describe("Muse LanguageModelV3 bridge", () => {
     for (const parts of [firstParts, secondParts, thirdParts]) {
       expect(parts.map((part) => part.type)).toContain("finish");
     }
-    // Teardown runs detached after the wrapper closes the stream at finish;
-    // wait for the last finisher's release instead of asserting mid-flight.
+    
+    
     await fake.releasedPromise;
     expect(fake.commands.filter((command) => command.method === "turn/start")).toHaveLength(1);
     expect(fake.released).toBe(1);
@@ -378,8 +378,8 @@ describe("Muse LanguageModelV3 bridge", () => {
   });
 
   test("languageModel.skipsReleaseWhenANewerTurnOwnsTheLease", async () => {
-    // A newer turn started after this one finished: the lease already moved
-    // on, so the late teardown must not release it out from under the owner.
+    
+    
     const fake = fakeRuntime({ events: textEvents(), activeTurnId: "turn-2" });
     const model = createMuseLanguageModel(fake.runtime, modelID);
     const result = await model.doStream(callOptions());
@@ -504,22 +504,6 @@ describe("Muse LanguageModelV3 bridge", () => {
         { role: "user", content: [{ type: "text", text: "Continue." }] },
       ],
     }))).rejects.toThrow(/fresh Muse session/i);
-    expect(fake.commands.some((command) => command.method === "turn/start")).toBe(false);
-  });
-
-  test("languageModel.explainsThatTranscriptDivergenceRequiresFreshSessionRecovery", async () => {
-    const fake = fakeRuntime({ previousTranscriptFingerprints: ["a".repeat(64), "b".repeat(64)] });
-    const model = createMuseLanguageModel(fake.runtime, modelID);
-    const error = await model.doGenerate(callOptions({
-      prompt: [
-        { role: "user", content: [{ type: "text", text: "same count, edited earlier turn" }] },
-        { role: "assistant", content: [{ type: "text", text: "old assistant" }] },
-        { role: "user", content: [{ type: "text", text: "latest" }] },
-      ],
-    })).then(() => undefined, (reason: unknown) => reason as Error);
-
-    expect(error?.name).toBe("MuseTranscriptDivergedError");
-    expect(error?.message).toMatch(/fresh Muse session/i);
     expect(fake.commands.some((command) => command.method === "turn/start")).toBe(false);
   });
 
@@ -835,8 +819,8 @@ describe("Muse LanguageModelV3 bridge", () => {
 
     expect(result.content).toEqual([]);
     expect(result.finishReason).toMatchObject({ unified: "stop", raw: "completed" });
-    // The V3 containers always exist (core reads inputTokens.total); only
-    // the totals stay undefined when unobserved.
+    
+    
     expect(result.usage).toMatchObject({
       inputTokens: { total: undefined, noCache: undefined, cacheRead: undefined, cacheWrite: undefined },
       outputTokens: { total: undefined, text: undefined, reasoning: undefined },
@@ -961,111 +945,6 @@ describe("Muse LanguageModelV3 bridge", () => {
     ],
   }];
 
-  test("languageModel.doStreamJoinsParkedTurnOnApprovalResponse", async () => {
-    const fake = fakeRuntime({
-      events: [
-        event("item/started", { sessionId: "ses_model_test", item: { itemId: "msg-1", turnId: "turn-parked", kind: "agentMessage" } }),
-        event("item/delta", { sessionId: "ses_model_test", itemId: "msg-1", field: "text", delta: "resumed" }),
-        event("item/completed", { sessionId: "ses_model_test", item: { itemId: "msg-1", turnId: "turn-parked", kind: "agentMessage", status: "completed", text: "resumed" } }),
-        event("turn/completed", { sessionId: "ses_model_test", turnId: "turn-parked", terminal: "completed" }),
-      ],
-      settleMatched: ["approval-1"],
-      joinParkedTurnId: "turn-parked",
-    });
-    const model = createMuseLanguageModel(fake.runtime, modelID);
-    const result = await model.doStream(callOptions({ prompt: approvalResponsePrompt() }));
-    const reader = result.stream.getReader();
-    const parts: Array<Record<string, unknown>> = [];
-    while (true) {
-      const next = await reader.read();
-      if (next.done) break;
-      parts.push(next.value as unknown as Record<string, unknown>);
-    }
-
-    expect(fake.settledResponses).toEqual([{
-      sessionID: "ses_model_test",
-      responses: [{ approvalId: "approval-1", approved: true }],
-    }]);
-    expect(fake.commands.some((command) => command.method === "turn/start")).toBe(false);
-    expect(parts.map((part) => part.type)).toEqual(["stream-start", "text-start", "text-delta", "text-end", "finish"]);
-    await fake.releasedPromise;
-    expect(fake.released).toBe(1);
-  });
-
-  test("languageModel.doStreamThrowsWhenApprovalResponsesCannotBeSettled", async () => {
-    const fake = fakeRuntime({ hasParkedApprovals: true });
-    const model = createMuseLanguageModel(fake.runtime, modelID);
-
-    await expect(model.doStream(callOptions({ prompt: approvalResponsePrompt() })))
-      .rejects.toThrow(/approval-response/);
-    expect(fake.commands.some((command) => command.method === "turn/start")).toBe(false);
-  });
-
-  test("languageModel.doGenerateRefusesApprovalResponsesWhileAnApprovalIsParked", async () => {
-    const fake = fakeRuntime({ events: textEvents(), hasParkedApprovals: true });
-    const model = createMuseLanguageModel(fake.runtime, modelID);
-
-    await expect(model.doGenerate(callOptions({ prompt: approvalResponsePrompt() })))
-      .rejects.toThrow(/approval-response/);
-    expect(fake.settledResponses).toEqual([]);
-    expect(fake.commands.some((command) => command.method === "turn/start")).toBe(false);
-  });
-
-  test("languageModel.doGenerateSettlesStaleResponsesAndStartsAFreshTurn", async () => {
-    const fake = fakeRuntime({ events: textEvents(), settleMatched: [], hasParkedApprovals: false });
-    const model = createMuseLanguageModel(fake.runtime, modelID);
-    const result = await model.doGenerate(callOptions({ prompt: approvalResponsePrompt() }));
-
-    expect(fake.settledResponses).toEqual([{
-      sessionID: "ses_model_test",
-      responses: [{ approvalId: "approval-1", approved: true }],
-    }]);
-    expect(fake.commands.some((command) => command.method === "turn/start")).toBe(true);
-    expect(result.content).toEqual([{ type: "text", text: "Probe answer" }]);
-  });
-
-  test("languageModel.supersededStreamClosesWithoutReleasingTheLease", async () => {
-    let releaseGate!: () => void;
-    const gate = new Promise<void>((resolve) => { releaseGate = resolve; });
-    const fake = fakeRuntime({
-      events: [
-        event("turn/started", { sessionId: "ses_model_test", turnId: "turn-1" }),
-        event("approval/requested", {
-          sessionId: "ses_model_test",
-          turnId: "turn-1",
-          approvalId: "approval-1",
-          currentRequirementId: "req-1",
-          toolCallId: "call-1",
-        }),
-        event("item/started", { sessionId: "ses_model_test", item: { itemId: "msg-1", turnId: "turn-1", kind: "agentMessage" } }),
-        event("turn/completed", { sessionId: "ses_model_test", turnId: "turn-1", terminal: "completed" }),
-      ],
-      streamEpoch: 7,
-      gateEventsAfter: { count: 2, release: gate },
-    });
-    const model = createMuseLanguageModel(fake.runtime, modelID);
-    const result = await model.doStream(callOptions());
-    const reader = result.stream.getReader();
-    const parts: Array<Record<string, unknown>> = [];
-    while (true) {
-      const next = await reader.read();
-      if (next.done) break;
-      parts.push(next.value as unknown as Record<string, unknown>);
-      if (parts.some((part) => part.type === "finish")) break;
-    }
-
-    expect(parts.map((part) => part.type)).toEqual(["stream-start", "text-start", "text-delta", "text-end", "finish"]);
-    fake.session.streamEpoch = 8;
-    fake.session.handoffTakeovers = 1;
-    releaseGate();
-    while (!(await reader.read()).done) {
-      // Drain until the superseded stream closes.
-    }
-
-    expect(fake.released).toBe(0);
-    expect(fake.commands.some((command) => command.method === "turn/interrupt")).toBe(false);
-  });
-
   test("languageModel.cancelAfterHandoffDoesNotInterruptTheJoinedTurn", async () => {
     const fake = fakeRuntime({ blockSubscription: true });
     const model = createMuseLanguageModel(fake.runtime, modelID);
@@ -1073,40 +952,12 @@ describe("Muse LanguageModelV3 bridge", () => {
     for (let attempt = 0; attempt < 50 && !fake.commands.some((command) => command.method === "turn/start"); attempt += 1) {
       await new Promise((resolve) => setTimeout(resolve, 1));
     }
-    // The manager hands the lease to the joining call mid-turn.
+    
     fake.session.handoffTakeovers = 1;
     await result.stream.getReader().cancel();
 
     expect(fake.commands.some((command) => command.method === "turn/interrupt")).toBe(false);
     expect(fake.released).toBe(0);
-  });
-
-  test("languageModel.divergenceDuringJoinDisarmsWithoutStartingATurn", async () => {
-    let disarmed = 0;
-    const fake = fakeRuntime({
-      previousTranscriptFingerprints: ["a".repeat(64)],
-      settleMatched: ["approval-1"],
-      joinParkedTurnId: "turn-parked",
-      onDisarm: () => { disarmed += 1; },
-    });
-    const model = createMuseLanguageModel(fake.runtime, modelID);
-    const error = await model.doStream(callOptions({
-      prompt: [
-        { role: "user", content: [{ type: "text", text: "edited earlier turn" }] },
-        { role: "assistant", content: [{ type: "text", text: "old assistant" }] },
-        {
-          role: "user",
-          content: [
-            { type: "tool-approval-response", approvalId: "approval-1", approved: true },
-            { type: "text", text: "latest" },
-          ],
-        },
-      ],
-    })).then(() => undefined, (reason: unknown) => reason as Error);
-
-    expect(error?.name).toBe("MuseTranscriptDivergedError");
-    expect(disarmed).toBe(1);
-    expect(fake.commands.some((command) => command.method === "turn/start")).toBe(false);
   });
 
   function headersForVariant(variant?: string) {
@@ -1131,227 +982,4 @@ describe("Muse LanguageModelV3 bridge", () => {
     expect(start?.params).toMatchObject({ reasoningEffort: "high" });
   });
 
-  test("languageModel.verdictTextReachesConsumeInsteadOfStartingATurn", async () => {
-    const fake = fakeRuntime({
-      events: textEvents(),
-      conversationalVerdict: { text: "I didn't understand — reply A or B.", settledLast: false },
-    });
-    const model = createMuseLanguageModel(fake.runtime, modelID);
-    const result = await model.doStream(callOptions());
-    const parts: Array<Record<string, unknown>> = [];
-    for await (const part of result.stream) parts.push(part as unknown as Record<string, unknown>);
-
-    expect(fake.consumedVerdicts).toEqual([{ sessionID: "ses_model_test", text: "Return the probe answer." }]);
-    expect(fake.commands.some((command) => command.method === "turn/start")).toBe(false);
-    expect(parts.map((part) => part.type)).toEqual(["stream-start", "text-start", "text-delta", "text-end", "finish"]);
-    expect((parts[2] as { delta: string }).delta).toContain("I didn't understand");
-  });
-
-  test("languageModel.decidedVerdictJoinsTheParkedTurnWithoutForwardingText", async () => {
-    const fake = fakeRuntime({
-      events: textEvents("turn-parked"),
-      joinParkedTurnId: "turn-parked",
-      conversationalVerdict: { text: "Recorded: Allow once (once). Resuming…", settledLast: true },
-    });
-    const model = createMuseLanguageModel(fake.runtime, modelID);
-    const result = await model.doStream(callOptions());
-    const parts: Array<Record<string, unknown>> = [];
-    for await (const part of result.stream) parts.push(part as unknown as Record<string, unknown>);
-
-    expect(fake.consumedVerdicts).toEqual([{ sessionID: "ses_model_test", text: "Return the probe answer." }]);
-    expect(fake.commands.some((command) => command.method === "turn/start")).toBe(false);
-    const deltas = parts.filter((part) => part.type === "text-delta").map((part) => (part as { delta: string }).delta);
-    expect(deltas[0]).toContain("Recorded: Allow once");
-    expect(deltas.join("")).toContain("Probe answer");
-    expect(deltas.join("")).not.toContain("Return the probe answer.");
-  });
-
-  test("languageModel.consumesTheVerdictBeforeResolvingTheSession", async () => {
-    const fake = fakeRuntime({
-      events: textEvents("turn-parked"),
-      joinParkedTurnId: "turn-parked",
-      conversationalVerdict: { text: "Recorded: Allow once (once). Resuming…", settledLast: true },
-    });
-    const calls: string[] = [];
-    const baseResolve = fake.runtime.resolveSession;
-    fake.runtime.resolveSession = async (context) => { calls.push("resolve"); return baseResolve(context); };
-    const baseConsume = fake.runtime.consumeConversationalVerdict;
-    fake.runtime.consumeConversationalVerdict = async (sessionID, text) => {
-      calls.push("consume");
-      return baseConsume(sessionID, text);
-    };
-    const model = createMuseLanguageModel(fake.runtime, modelID);
-    const result = await model.doStream(callOptions());
-    for await (const _part of result.stream) { /* drain */ }
-
-    expect(calls).toEqual(["consume", "resolve"]);
-    expect(fake.consumedVerdicts).toHaveLength(1);
-    expect(fake.commands.some((command) => command.method === "turn/start")).toBe(false);
-  });
-
-  test("languageModel.verdictUsesOnlyTheLatestUserMessage", async () => {
-    // A parked turn never advances fingerprints, so its consumed input is
-    // still "new" on the next prompt: replying "B" after an earlier "yes"
-    // must consume "B", not "yes\nB".
-    const userMessage = (text: string) => ({ role: "user", content: [{ type: "text", text }] });
-    const assistantMessage = (text: string) => ({ role: "assistant", content: [{ type: "text", text }] });
-    const previous = [userMessage("Fetch https://example.com")];
-    const prompt = [
-      ...previous,
-      userMessage("yes"),
-      assistantMessage("Fetching now."),
-      userMessage("B"),
-    ];
-    const fake = fakeRuntime({
-      events: textEvents(),
-      conversationalVerdict: { text: "Recorded.", settledLast: true },
-    });
-    fake.runtime.previousTranscriptFingerprints = () =>
-      fingerprintVisibleTranscript(previous as never);
-    const model = createMuseLanguageModel(fake.runtime, modelID);
-    const result = await model.doStream(callOptions({ prompt }));
-    for await (const _part of result.stream) { /* drain */ }
-
-    expect(fake.consumedVerdicts).toEqual([{ sessionID: "ses_model_test", text: "B" }]);
-  });
-
-  test("languageModel.syntheticFinishCarriesNestedV3Usage", async () => {
-    const fake = fakeRuntime({
-      events: textEvents(),
-      conversationalVerdict: { text: "I didn't understand — reply A or B.", settledLast: false },
-    });
-    const model = createMuseLanguageModel(fake.runtime, modelID);
-    const result = await model.doStream(callOptions());
-    const parts: Array<Record<string, unknown>> = [];
-    for await (const part of result.stream) parts.push(part as unknown as Record<string, unknown>);
-
-    const finish = parts.find((part) => part.type === "finish");
-    expect(finish).toMatchObject({
-      usage: {
-        inputTokens: { total: undefined, noCache: undefined, cacheRead: undefined, cacheWrite: undefined },
-        outputTokens: { total: undefined, text: undefined, reasoning: undefined },
-      },
-    });
-  });
-
-  test("languageModel.recoveryKeepThrowsAReadableErrorWithoutResolving", async () => {
-    const fake = fakeRuntime({ events: textEvents() });
-    const calls: string[] = [];
-    const baseResolve = fake.runtime.resolveSession;
-    fake.runtime.resolveSession = async (context) => { calls.push("resolve"); return baseResolve(context); };
-    fake.runtime.consumeRecoveryDecision = async () => ({
-      text: "turn/start from 60s ago\n\nA. Abandon the stuck turn and restart fresh",
-      abandoned: false,
-    });
-    const model = createMuseLanguageModel(fake.runtime, modelID);
-    const error = await model.doStream(callOptions()).then(() => null, (reason: unknown) => reason as Error);
-
-    expect(error?.name).toBe("MuseRecoveryChoiceRequiredError");
-    expect(error?.message).toContain("Abandon");
-    expect(calls).toEqual([]);
-    expect(fake.consumedVerdicts).toEqual([]);
-  });
-
-  test("languageModel.recoveryAbandonClearsAndConfirmsSynthetically", async () => {
-    const fake = fakeRuntime({ events: textEvents() });
-    fake.runtime.consumeRecoveryDecision = async () => ({
-      text: "Abandoned the stuck turn — re-prompt to try again.",
-      abandoned: true,
-    });
-    const model = createMuseLanguageModel(fake.runtime, modelID);
-    const result = await model.doStream(callOptions());
-    const parts: Array<Record<string, unknown>> = [];
-    for await (const part of result.stream) parts.push(part as unknown as Record<string, unknown>);
-
-    expect(parts.map((part) => part.type)).toEqual(["stream-start", "text-start", "text-delta", "text-end", "finish"]);
-    expect((parts[2] as { delta: string }).delta).toContain("Abandoned the stuck turn");
-    expect(fake.commands.some((command) => command.method === "turn/start")).toBe(false);
-  });
-
-  test("languageModel.secondMismatchDenyInterruptsAndRunsTheMessage", async () => {
-    const fake = fakeRuntime({
-      events: textEvents(),
-      joinParkedTurnId: "turn-parked",
-      conversationalVerdict: {
-        text: "Denied network — no valid option was given. That request is closed; your message now runs as a fresh turn.",
-        settledLast: true,
-        runMessageAsTurn: true,
-      },
-    });
-    const model = createMuseLanguageModel(fake.runtime, modelID);
-    const result = await model.doStream(callOptions());
-    const parts: Array<Record<string, unknown>> = [];
-    for await (const part of result.stream) parts.push(part as unknown as Record<string, unknown>);
-
-    // Fresh turn (not a join), parked turn interrupted, denial shown first.
-    const starts = fake.commands.filter((command) => command.method === "turn/start");
-    expect(starts).toHaveLength(1);
-    expect(starts[0]!.params).toMatchObject({ input: [{ type: "text", text: "Return the probe answer." }] });
-    const interrupts = fake.commands.filter((command) => command.method === "turn/interrupt");
-    expect(interrupts).toHaveLength(1);
-    expect(interrupts[0]!.params).toMatchObject({ turnId: "turn-parked", retract: true });
-    const deltas = parts.filter((part) => part.type === "text-delta").map((part) => part.delta as string);
-    expect(deltas.some((delta) => delta.includes("Denied network"))).toBe(true);
-  });
-
-  test("languageModel.verdictsTakePriorityOverAnswers", async () => {
-    const fake = fakeRuntime({
-      events: textEvents("turn-parked"),
-      conversationalVerdict: { text: "Recorded: Allow once.", settledLast: true },
-      conversationalAnswer: { text: "Recorded: Blue.", settledLast: true },
-      joinParkedTurnId: "turn-parked",
-    });
-    const model = createMuseLanguageModel(fake.runtime, modelID);
-    const result = await model.doStream(callOptions());
-    const parts: Array<Record<string, unknown>> = [];
-    for await (const part of result.stream) parts.push(part as unknown as Record<string, unknown>);
-
-    expect(fake.consumedVerdicts).toHaveLength(1);
-    expect(fake.consumedAnswers).toEqual([]);
-    const deltas = parts.filter((part) => part.type === "text-delta").map((part) => (part as { delta: string }).delta);
-    expect(deltas[0]).toContain("Recorded: Allow once.");
-  });
-
-  test("languageModel.answerTextReachesConsumeInsteadOfStartingATurn", async () => {
-    const fake = fakeRuntime({
-      events: textEvents(),
-      conversationalVerdict: null,
-      conversationalAnswer: { text: "Which color? A. Blue", settledLast: false },
-    });
-    const model = createMuseLanguageModel(fake.runtime, modelID);
-    const result = await model.doStream(callOptions());
-    const parts: Array<Record<string, unknown>> = [];
-    for await (const part of result.stream) parts.push(part as unknown as Record<string, unknown>);
-
-    expect(fake.consumedAnswers).toEqual([{ sessionID: "ses_model_test", text: "Return the probe answer." }]);
-    expect(fake.commands.some((command) => command.method === "turn/start")).toBe(false);
-    expect(parts.map((part) => part.type)).toEqual(["stream-start", "text-start", "text-delta", "text-end", "finish"]);
-    expect((parts[2] as { delta: string }).delta).toContain("Which color?");
-  });
-
-  test("languageModel.syntheticVerdictGeneratesTextWithoutATurn", async () => {
-    const fake = fakeRuntime({
-      conversationalVerdict: { text: "Denied shell — re-prompt to try again.", settledLast: false },
-    });
-    const model = createMuseLanguageModel(fake.runtime, modelID);
-    const result = await model.doGenerate(callOptions());
-
-    expect(fake.consumedVerdicts).toEqual([{ sessionID: "ses_model_test", text: "Return the probe answer." }]);
-    expect(fake.commands.some((command) => command.method === "turn/start")).toBe(false);
-    expect(result.content).toEqual([{ type: "text", text: "Denied shell — re-prompt to try again." }]);
-  });
-
-  test("languageModel.cancelWhileParkedDeniesThePendingApproval", async () => {
-    let denied = 0;
-    const fake = fakeRuntime({
-      blockSubscription: true,
-      onCancelParked: () => { denied += 1; },
-    });
-    const model = createMuseLanguageModel(fake.runtime, modelID);
-    const result = await model.doStream(callOptions());
-    await result.stream.getReader().cancel();
-
-    expect(denied).toBe(1);
-    expect(fake.commands.some((command) => command.method === "turn/interrupt")).toBe(true);
-  });
 });
