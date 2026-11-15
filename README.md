@@ -55,11 +55,10 @@ If `muse usage` fails or its output changes, a meter reads `unavailable` and not
 
 ## Configuration
 
-Two process-wide environment variables, read once at load:
+One process-wide environment variable, read once at load. The Contributor billing lane is hardcoded on; models appear as `muse/muse-spark-1.3`, `muse/muse-wonder-1.0` and so on.
 
 | Variable | Values | Meaning |
 |---|---|---|
-| `OPENCODE_MUSE_CONTRIBUTOR_MODE` | unset or `on` / `off` | Billing lane. Default requests the Contributor lane like the Muse TUI. |
 | `OPENCODE_MUSE_TOOL_BACKEND` | unset or `muse` / `opencode` | `opencode` lets OpenCode execute tools through a loopback MCP bridge. |
 
 ## Compatibility

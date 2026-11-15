@@ -49,9 +49,8 @@ export const fallbackCatalog: Model.Info[] = [
   } as unknown as Model.Info,
 ];
 
-export function openCodeModelId(profileId: string | null, modelId: string): string {
-  const profileKey = profileId === null ? "no-profile" : `profile-${encodeURIComponent(profileId)}`;
-  return `muse-${profileKey}-model-${encodeURIComponent(modelId)}`;
+export function openCodeModelId(modelId: string): string {
+  return modelId;
 }
 
 function parseCost(value: string): number | undefined {
@@ -84,7 +83,7 @@ function modelInfo(row: MuseCatalogRow): Model.Info {
     && row.outputLimit > 0;
   const effortVariants = Array.isArray(row.variants) ? row.variants : [];
   return {
-    id: openCodeModelId(row.profileId, row.modelId),
+    id: openCodeModelId(row.modelId),
     modelID: row.modelId,
     providerID: MUSE_PROVIDER_ID,
     name: limitsKnown ? row.displayLabel : `${row.displayLabel} (limits unavailable)`,
@@ -120,7 +119,7 @@ export function buildMuseModelIndex(museCatalog: MuseCatalogSnapshot): Map<strin
   if (museCatalog.source !== "providerCatalog") return result;
   for (const row of museCatalog.models) {
     if (!row.providerId || !row.modelId || !row.displayLabel) continue;
-    result.set(openCodeModelId(row.profileId, row.modelId), {
+    result.set(openCodeModelId(row.modelId), {
       providerId: row.providerId,
       profileId: row.profileId,
       modelId: row.modelId,

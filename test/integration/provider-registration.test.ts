@@ -121,7 +121,7 @@ describe("Muse OpenCode provider registration", () => {
     const request = {
       sessionID: "ses_plugin_test",
       kind: "primary",
-      model: { id: "muse-profile-tbh-model-muse-wonder-1.0", providerID: "muse", variant: "high" },
+      model: { id: "muse-wonder-1.0", providerID: "muse", variant: "high" },
       headers: { "x-existing": "kept" },
     };
     hook?.callback(request);
@@ -130,7 +130,7 @@ describe("Muse OpenCode provider registration", () => {
       "x-opencode-muse-session-id": "ses_plugin_test",
       "x-opencode-muse-directory": "/tmp/opencode/muse-plugin-test",
       "x-opencode-muse-kind": "primary",
-      "x-opencode-muse-model-id": "muse-profile-tbh-model-muse-wonder-1.0",
+      "x-opencode-muse-model-id": "muse-wonder-1.0",
       "x-opencode-muse-provider-id": "muse",
       "x-opencode-muse-variant": "high",
     });
@@ -147,7 +147,7 @@ describe("Muse OpenCode provider registration", () => {
     const hook = fake.aisdkHooks.find((candidate) => candidate.name === "language");
     expect(hook?.options).toEqual({ providerID: "muse" });
     const input: { model: { id: string; modelID: string; providerID: string }; language?: { provider: string; modelId: string; doGenerate?: unknown } } = {
-      model: { id: "muse-profile-tbh-model-muse-wonder-1.0", modelID: "muse-wonder-1.0", providerID: "muse" },
+      model: { id: "muse-wonder-1.0", modelID: "muse-wonder-1.0", providerID: "muse" },
     };
 
     hook?.callback(input);
@@ -279,39 +279,8 @@ describe("Muse OpenCode provider registration", () => {
     await runtime.refreshTask;
 
     expect(seen).toHaveLength(1);
-    expect(seen[0]).toMatchObject({ contributorMode: "on" });
+    expect(seen[0]).toMatchObject({ toolBackend: "muse" });
     await runtime.dispose();
-  });
-
-  test("provider.honorsAnExplicitStandardOptOut", async () => {
-    const fake = fakeContext({ contributorMode: false });
-    const seen: SessionManagerBase[] = [];
-    const runtime = await createProviderPlugin(fake.context as never, "file:///plugin/dist/index.js", {
-      fetchCatalog: async () => liveCatalog(),
-      serveHelpRunner: okServeHelp,
-      createSessionManager: (base) => {
-        seen.push(base);
-        return { async close() {} } as never;
-      },
-    });
-    await runtime.refreshTask;
-
-    expect(seen[0]).toMatchObject({ contributorMode: "off" });
-    await runtime.dispose();
-  });
-
-  test("provider.rejectsAnInvalidContributorModeBeforeAnyHostStarts", async () => {
-    const fake = fakeContext({ contributorMode: "sometimes" });
-    const error = await createProviderPlugin(fake.context as never, "file:///plugin/dist/index.js", {
-      fetchCatalog: async () => liveCatalog(),
-      serveHelpRunner: okServeHelp,
-    }).then(
-      () => null,
-      (caught: unknown) => caught,
-    );
-
-    expect(error).toBeInstanceOf(MuseInvalidConfigError);
-    expect((error as MuseInvalidConfigError).code).toBe("MUSE_INVALID_CONFIG");
   });
 
   test("provider.failsClosedWhenTheCliLacksTheContributorFlag", async () => {

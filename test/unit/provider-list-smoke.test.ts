@@ -43,7 +43,7 @@ test("provider-list smoke rejects OpenRouter Muse model rows without the Muse pr
 });
 
 test("provider-list smoke accepts rows from the Muse provider", () => {
-  const result = runProviderListProbe(["muse/muse-profile-tbh-model-muse-spark-1.3"]);
+  const result = runProviderListProbe(["muse/muse-spark-1.3"]);
 
   expect(result.status).toBe(0);
 });

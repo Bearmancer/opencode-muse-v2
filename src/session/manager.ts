@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 import type { MspHandshake } from "@muse-code/sdk";
 import type { RequestContext } from "../types.js";
 import { MspHost } from "../msp/host.js";
-import { baseServeArgs, type ContributorMode } from "../msp/contributor.js";
+import { baseServeArgs } from "../msp/contributor.js";
 import {
   composeWorktreeNotices,
   countSharedSessions,
@@ -54,7 +54,6 @@ export interface MuseSessionManagerOptions {
   workspaceLock: WorkspaceLock;
   museBin?: string;
   
-  contributorMode?: ContributorMode;
   
   toolBackend?: ToolBackend;
   createHost?(options: { museBin?: string; cwd: string; args: readonly string[]; env?: NodeJS.ProcessEnv; capabilities?: Parameters<MspHandshake["initialize"]>[0]["capabilities"] }): Promise<MuseSessionHost>;
@@ -121,14 +120,12 @@ function selectionMatches(
 export class MuseSessionManager {
   private readonly bindings = new Map<string, ManagedBinding>();
   private readonly contextBySession = new Map<string, AgentContextResult>();
-  private readonly contributorMode: ContributorMode;
   private readonly toolBackend: ToolBackend;
   private readonly createHost: NonNullable<MuseSessionManagerOptions["createHost"]>;
   private readonly worktreeVcs: WorktreeVcs;
   private closed = false;
 
   constructor(private readonly options: MuseSessionManagerOptions) {
-    this.contributorMode = options.contributorMode ?? "on";
     this.toolBackend = options.toolBackend ?? "muse";
     this.worktreeVcs = options.worktreeVcs ?? defaultWorktreeVcs;
     this.createHost = options.createHost ?? (async ({ museBin, cwd, args, env, capabilities }) => MspHost.start({
@@ -245,7 +242,7 @@ export class MuseSessionManager {
       host = await this.createHost({
         museBin: this.options.museBin,
         cwd: canonicalDirectory,
-        args: baseServeArgs(stored?.providerId ?? selected.providerId, this.contributorMode),
+        args: baseServeArgs(stored?.providerId ?? selected.providerId),
         env: backendEnv,
         capabilities: {
           userInputDialogs: false,

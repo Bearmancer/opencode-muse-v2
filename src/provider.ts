@@ -17,13 +17,9 @@ import { makeCompactionDigest, makeLocalTitle } from "./model/meta.js";
 import { fingerprintCompactionOutput } from "./session/fingerprint.js";
 import { extractAllowedAgentContext } from "./model/agent-context.js";
 import {
-  CONTRIBUTOR_MODE_ENV,
-  CONTRIBUTOR_MODE_OPTION,
   assertContributorFlagSupported,
   baseServeArgs,
   paygBillingNotice,
-  resolveContributorMode,
-  type ContributorMode,
   type ServeHelpRunner,
 } from "./msp/contributor.js";
 import {
@@ -43,7 +39,6 @@ export interface SessionManagerBase {
   registry: SessionRegistry;
   workspaceLock: WorkspaceLock;
   museBin?: string;
-  contributorMode: ContributorMode;
   toolBackend: ToolBackend;
 }
 
@@ -78,11 +73,11 @@ function providerInfo(moduleUrl: string): Provider.Info {
   } as unknown as Provider.Info;
 }
 
-async function fetchMuseCatalog(directory: string, contributorMode: ContributorMode): Promise<MuseCatalogSnapshot> {
+async function fetchMuseCatalog(directory: string): Promise<MuseCatalogSnapshot> {
   
   
   const host = await MspHost.start({
-    args: [...baseServeArgs("meta", contributorMode), "--disable-shell", "--disable-write"],
+    args: [...baseServeArgs("meta"), "--disable-shell", "--disable-write"],
     cwd: directory,
     startupTimeoutMs: 10_000,
     requestTimeoutMs: 10_000,
@@ -104,9 +99,6 @@ export async function createProviderPlugin(
   
   
   
-  const contributorMode = resolveContributorMode(
-    ctx.options?.[CONTRIBUTOR_MODE_OPTION] ?? process.env[CONTRIBUTOR_MODE_ENV],
-  );
   const museBin = dependencies.museBin;
   await assertContributorFlagSupported(museBin ?? "muse", dependencies.serveHelpRunner);
   
@@ -128,9 +120,6 @@ export async function createProviderPlugin(
   if (paygNotice) console.warn(`opencode-muse: ${paygNotice}`);
   
   
-  console.warn(
-    `opencode-muse: serve hosts request the ${contributorMode === "on" ? "Contributor" : "Standard"} billing lane (--contributor-mode ${contributorMode}).`,
-  );
   const catalog = new CatalogCache();
   const stateDirectory = SessionRegistry.resolveStateDirectory();
   const managerBase: SessionManagerBase = {
@@ -138,7 +127,6 @@ export async function createProviderPlugin(
     registry: new SessionRegistry({ stateDirectory }),
     workspaceLock: new WorkspaceLock({ stateDirectory }),
     museBin,
-    contributorMode,
     toolBackend,
   };
   const sessions = dependencies.createSessionManager?.(managerBase) ?? new MuseSessionManager(managerBase);
@@ -202,7 +190,7 @@ export async function createProviderPlugin(
   const refreshTask = new Promise<void>((resolve) => setTimeout(resolve, 0)).then(() => {
     if (disposed) return false;
     return catalog.refresh(
-      () => (dependencies.fetchCatalog ?? ((directory: string) => fetchMuseCatalog(directory, contributorMode)))(
+      () => (dependencies.fetchCatalog ?? ((directory: string) => fetchMuseCatalog(directory)))(
         ctx.location.directory,
       ),
       async () => {

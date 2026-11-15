@@ -57,7 +57,7 @@ describe("Muse model catalog", () => {
     const index = buildMuseModelIndex(museCatalog);
 
     expect(wonder).toMatchObject({
-      id: openCodeModelId("tbh", "muse-wonder-1.0"),
+      id: openCodeModelId("muse-wonder-1.0"),
       providerID: "muse",
       modelID: "muse-wonder-1.0",
       name: "Muse Wonder 1.0",
@@ -81,7 +81,7 @@ describe("Muse model catalog", () => {
   test("catalog.keepsSessionActiveAndCatalogDefaultInTheSelectionIndex", () => {
     const museCatalog = catalog();
     const index = buildMuseModelIndex(museCatalog);
-    const activeId = openCodeModelId("tbh", "muse-spark-1.2");
+    const activeId = openCodeModelId("muse-spark-1.2");
     expect(index.get(activeId)).toMatchObject({ isActive: true, isDefault: false, variantsKnown: true });
   });
 

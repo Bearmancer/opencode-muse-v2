@@ -2,47 +2,14 @@ import { describe, expect, test } from "bun:test";
 import {
   assertContributorFlagSupported,
   baseServeArgs,
-  contributorServeArgs,
   museChildEnv,
   paygBillingNotice,
-  resolveContributorMode,
 } from "../../src/msp/contributor.js";
 import { MuseInvalidConfigError } from "../../src/errors.js";
 
 describe("Contributor billing lane", () => {
-  test("contributor.defaultsToOnWhenUnset", () => {
-    expect(resolveContributorMode(undefined)).toBe("on");
-  });
-
-  test("contributor.acceptsExplicitBooleansAndFlagStrings", () => {
-    expect(resolveContributorMode(true)).toBe("on");
-    expect(resolveContributorMode(false)).toBe("off");
-    expect(resolveContributorMode("on")).toBe("on");
-    expect(resolveContributorMode("off")).toBe("off");
-    expect(resolveContributorMode(" ON ")).toBe("on");
-  });
-
-  test("contributor.rejectsAnythingElseFailClosed", () => {
-    for (const raw of ["sometimes", 42, {}, ["on"], "default"]) {
-      let error: unknown;
-      try {
-        resolveContributorMode(raw);
-      } catch (caught) {
-        error = caught;
-      }
-      expect(error).toBeInstanceOf(MuseInvalidConfigError);
-      expect((error as MuseInvalidConfigError).code).toBe("MUSE_INVALID_CONFIG");
-    }
-  });
-
-  test("contributor.buildsThePerProcessServeFlag", () => {
-    expect(contributorServeArgs("on")).toEqual(["--contributor-mode", "on"]);
-    expect(contributorServeArgs("off")).toEqual(["--contributor-mode", "off"]);
-  });
-
   test("contributor.buildsOneBaseArgvForEveryServeHost", () => {
-    expect(baseServeArgs("meta", "on")).toEqual(["serve", "--provider", "meta", "--contributor-mode", "on"]);
-    expect(baseServeArgs("meta", "off")).toEqual(["serve", "--provider", "meta", "--contributor-mode", "off"]);
+    expect(baseServeArgs("meta")).toEqual(["serve", "--provider", "meta", "--contributor-mode", "on"]);
   });
 
   test("contributor.capabilityCheckPassesWhenTheCliAdvertisesTheFlag", async () => {

@@ -4,7 +4,7 @@ import { createMuseLanguageModel, type MuseLanguageRuntime } from "../../src/mod
 import { fingerprintTranscript } from "../../src/session/fingerprint.js";
 import type { RequestContext } from "../../src/types.js";
 
-const modelId = "muse-profile-tbh-model-muse-wonder-1.0";
+const modelId = "muse-wonder-1.0";
 const selection = { providerId: "meta", profileId: "tbh", modelId: "muse-wonder-1.0" };
 
 function headers(sessionID: string): Record<string, string> {

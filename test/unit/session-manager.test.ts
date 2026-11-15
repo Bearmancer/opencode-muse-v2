@@ -114,20 +114,6 @@ function managerAt(
 }
 
 describe("MuseSessionManager", () => {
-  test("sessionManager.spawnsServeWithTheRequestedBillingLane", async () => {
-    for (const [mode, flag] of [[undefined, "on"], ["off", "off"]] as const) {
-      const root = tempRoot();
-      const { manager, hostOptions } = managerAt(root, false, false, undefined, undefined, undefined, mode);
-      const directory = join(root, "project");
-      mkdirSync(directory);
-      const binding = await manager.resolveSession(context("ses_oc_1", directory));
-      await binding.release?.();
-
-      expect(hostOptions[0]?.args).toEqual(["serve", "--provider", "meta", "--contributor-mode", flag]);
-      await manager.close();
-    }
-  });
-
   test("sessionManager.rejectsSecondOpenCodeWriterForSameWorkspace", async () => {
     const root = tempRoot();
     const { manager } = managerAt(root);

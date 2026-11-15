@@ -2,35 +2,6 @@ import { spawnSync } from "node:child_process";
 import { MuseInvalidConfigError } from "../errors.js";
 
 
-export type ContributorMode = "on" | "off";
-
-
-export const CONTRIBUTOR_MODE_OPTION = "contributorMode";
-
-
-export const CONTRIBUTOR_MODE_ENV = "OPENCODE_MUSE_CONTRIBUTOR_MODE";
-
-
-export function resolveContributorMode(raw: unknown): ContributorMode {
-  if (raw === undefined) return "on";
-  if (raw === true) return "on";
-  if (raw === false) return "off";
-  if (typeof raw === "string") {
-    const wanted = raw.trim().toLowerCase();
-    if (wanted === "on") return "on";
-    if (wanted === "off") return "off";
-  }
-  throw new MuseInvalidConfigError(
-    `Invalid Contributor mode ${JSON.stringify(raw) ?? "?"}: set ${CONTRIBUTOR_MODE_OPTION} to true/false (or ${CONTRIBUTOR_MODE_ENV} to on/off), or leave it unset for the default (on).`,
-  );
-}
-
-
-export function contributorServeArgs(mode: ContributorMode): [string, ContributorMode] {
-  return ["--contributor-mode", mode];
-}
-
-
 const STRIPPED_CHILD_ENV_KEYS = new Set(["META_API_KEY", "MUSE_CONTRIBUTOR_MODE"]);
 
 
@@ -46,8 +17,8 @@ export function museChildEnv(source: Record<string, string | undefined> = proces
 }
 
 
-export function baseServeArgs(providerId: string, mode: ContributorMode): string[] {
-  return ["serve", "--provider", providerId, ...contributorServeArgs(mode)];
+export function baseServeArgs(providerId: string): string[] {
+  return ["serve", "--provider", providerId, "--contributor-mode", "on"];
 }
 
 export interface ServeHelpResult {
