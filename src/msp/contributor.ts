@@ -57,7 +57,7 @@ export interface ServeHelpResult {
 export type ServeHelpRunner = (museBin: string) => ServeHelpResult | Promise<ServeHelpResult>;
 
 function defaultServeHelpRunner(museBin: string): ServeHelpResult {
-  const result = spawnSync(museBin, ["serve", "--help"], { encoding: "utf8", timeout: 15_000, env: museChildEnv(process.env) });
+  const result = spawnSync(museBin, ["serve", "--help"], { encoding: "utf8", timeout: 15_000, env: museChildEnv(process.env), windowsHide: true });
   return { stdout: typeof result.stdout === "string" ? result.stdout : "" };
 }
 

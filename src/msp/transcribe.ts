@@ -93,7 +93,7 @@ function defaultSpawn(
     
     
     
-    const child = spawn(museBin, ["voice", "transcribe", clipPath], { env });
+    const child = spawn(museBin, ["voice", "transcribe", clipPath], { env, windowsHide: true });
     let stdout = "";
     let stderr = "";
     let timedOut = false;

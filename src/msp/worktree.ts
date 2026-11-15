@@ -123,7 +123,7 @@ export interface WorktreeVcs {
 
 function runGit(args: string[], cwd: string): Promise<string> {
   return new Promise((resolve, reject) => {
-    execFile("git", args, { cwd }, (error, stdout) => {
+    execFile("git", args, { cwd, windowsHide: true }, (error, stdout) => {
       if (error) reject(error);
       else resolve(stdout);
     });
