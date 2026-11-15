@@ -8,6 +8,7 @@ Last reviewed: 2026-11-15 by autopilot (deepwork; non-interactive — floor appl
 - No unimplemented stubs: `throw new Error("Not implemented")`, empty `catch {}` without a documented reason
 - No skipped or deleted tests without a reason in the commit message (removal of approval/recovery machinery deletes their tests deliberately — reason: feature removed, spec SPEC-v2.md)
 - No secrets in source; never read or log Muse credentials/config from plugin code
+- Every child process the plugin spawns sets windowsHide: true; the plugin never opens a console window (enforced by test/unit/headless.test.ts)
 - This file does not get weakened to make a change pass
 
 ## Enforced with numbers

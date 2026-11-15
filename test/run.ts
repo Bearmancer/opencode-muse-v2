@@ -60,3 +60,4 @@ test("TypeScript configuration enables strict checking", () => {
   const tsconfig = readRepositoryJson<TypeScriptConfig>("tsconfig.json");
   expect(tsconfig.compilerOptions?.strict).toBe(true);
 });
+import "./unit/headless.test.ts";
