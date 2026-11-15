@@ -50,9 +50,9 @@ export interface ExtractTurnInputOptions {
   maxMediaBytes?: number;
   maxInlineImageBytes?: number;
   signal?: AbortSignal;
-  /** Absent: audio falls back to `unsupported-media` (pre-#32 behavior). */
+  
   transcribeAudio?: TranscribeAudio;
-  /** Absent: PDF falls back to `unsupported-media` (pre-#33 behavior). */
+  
   stagePdfAttachment?: StagePdfAttachment;
 }
 
@@ -191,7 +191,7 @@ type SlicedMessages =
   | { ok: true; messages: ReturnType<typeof visibleMessages>; fingerprints: string[] }
   | { ok: false; reason: "transcript-diverged" | "no-new-user-input" };
 
-/** Shared slicing core: messages not yet covered by previous fingerprints. */
+
 function sliceNewMessages(
   prompt: LanguageModelV3Prompt,
   previousTranscriptFingerprints: readonly string[],
@@ -207,8 +207,8 @@ function sliceNewMessages(
     }
     newMessages = current.slice(previousTranscriptFingerprints.length);
   } else {
-    // On first use in an existing OpenCode session, send only the final user
-    // turn; never replay its previous transcript into a new Muse session.
+    
+    
     let lastUserIndex = -1;
     for (let index = 0; index < current.length; index += 1) {
       if (current[index]!.message.role === "user") lastUserIndex = index;
@@ -223,16 +223,7 @@ function sliceNewMessages(
   return { ok: true, messages: newMessages, fingerprints: currentFingerprints };
 }
 
-/**
- * Text of the latest not-yet-seen user message, text parts only. A parked
- * turn never advances fingerprints, so its consumed input is still "new"
- * on the next prompt — joining everything would resend stale text (e.g. an
- * earlier "yes" ahead of the fresh "B"). The verdict peek runs before the
- * session resolves (so a verdict can reattach without fighting the parked
- * turn's workspace lease), where transcription and staging are unavailable
- * — media-only replies peek as "" and stay on the normal path. Returns ""
- * when nothing new was said.
- */
+
 export function latestUserText(
   prompt: LanguageModelV3Prompt,
   previousTranscriptFingerprints: readonly string[],
@@ -256,11 +247,7 @@ export interface ExtractedToolResult {
   outputText: string;
 }
 
-/**
- * Tool results addressed to the bridge (opencode backend, #37). Only `tool`
- * role messages with well-formed `tool-result` parts count; history
- * `assistant` tool-call parts never do. Anything else fails closed upstream.
- */
+
 export function extractToolResults(prompt: LanguageModelV3Prompt): ExtractedToolResult[] {
   const results: ExtractedToolResult[] = [];
   if (!Array.isArray(prompt)) return results;
@@ -329,37 +316,6 @@ export async function extractTurnInput(
   if (options.signal?.aborted) return { ok: false, error: inputError("aborted") };
   if (parts.length === 0) return { ok: false, error: inputError("no-new-user-input") };
   return { ok: true, parts, nextTranscriptFingerprints: sliced.fingerprints };
-}
-
-export interface ApprovalResponse {
-  approvalId: string;
-  approved: boolean;
-  /** Exact offered choice for a conversational verdict; validated on decide. */
-  choiceId?: string;
-}
-
-/**
- * Collect OpenCode's answers to approval prompts. Core never delivers these
- * (it drops the request parts), so conversational verdicts are consumed
- * separately; both funnels meet in `settleApprovalResponses`. Malformed
- * entries are ignored; the caller treats an unmatched response as stale and
- * drops it rather than failing the turn.
- */
-export function extractApprovalResponses(prompt: LanguageModelV3Prompt): ApprovalResponse[] {
-  const responses: ApprovalResponse[] = [];
-  for (const message of prompt) {
-    if (message.role !== "user") continue;
-    const content = (message as { content?: unknown }).content;
-    if (!Array.isArray(content)) continue;
-    for (const part of content) {
-      if (typeof part !== "object" || part === null) continue;
-      const candidate = part as Record<string, unknown>;
-      if (candidate.type !== "tool-approval-response") continue;
-      if (typeof candidate.approvalId !== "string" || typeof candidate.approved !== "boolean") continue;
-      responses.push({ approvalId: candidate.approvalId, approved: candidate.approved });
-    }
-  }
-  return responses;
 }
 
 export function validateModelOptions(options: ModelOptionsInput): ModelOptionsResult {

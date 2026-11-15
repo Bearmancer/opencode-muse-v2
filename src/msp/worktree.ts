@@ -1,13 +1,7 @@
 import { execFile } from "node:child_process";
 import { MspCommandRejectedError } from "../errors.js";
 
-/**
- * Post-v1 parallel writers (#34). Each OpenCode session starts its Muse
- * session on a server-managed worktree instead of sharing the checkout;
- * the human merges through normal source control. Untrusted workspaces
- * and missing experimental surface fall back to the single-writer lock
- * with a conversational notice — never a failure.
- */
+
 
 export type WorktreeStart = { mode: "create"; baseRef?: string } | { mode: "existing"; path: string };
 
@@ -17,12 +11,7 @@ export interface ManagedWorktree {
   baseSha?: string;
 }
 
-/**
- * Rejection kinds known to mean "no worktree path", never a defect. The
- * session manager retries any other explicit rejection once without the
- * worktree parameter (non-git checkouts and untrusted workspaces surface
- * under server-chosen kinds), so this set only documents the taxonomy.
- */
+
 const WORKTREE_FALLBACK_KINDS = new Set(["experimentalRequired", "capabilityRequired", "workspaceNotTrusted"]);
 
 const FALLBACK_PHRASES: Record<string, string> = {
@@ -57,7 +46,7 @@ function sessionIdsOf(entry: WorktreeListEntry): string[] {
   return entry.sessionIds.filter((id): id is string => typeof id === "string");
 }
 
-/** The caller's own worktree, matched by live session id. */
+
 export function findOwnWorktree(listResult: unknown, sessionId: string): { path: string; branch?: string } | undefined {
   for (const entry of entryList(listResult)) {
     if (typeof entry.path !== "string") continue;
@@ -67,7 +56,7 @@ export function findOwnWorktree(listResult: unknown, sessionId: string): { path:
   return undefined;
 }
 
-/** Other live sessions bound to the user's checkout (redirect signal). */
+
 export function countSharedSessions(listResult: unknown, workspaceRoot: string, ownSessionId: string): number {
   let count = 0;
   for (const entry of entryList(listResult)) {
@@ -86,7 +75,7 @@ export interface WorktreeNotices {
   sharedOthers?: number;
 }
 
-/** Bridge-authored, labeled, first-turn-only. Never smuggled prose. */
+
 export function composeWorktreeNotices(notices: WorktreeNotices): string[] {
   const lines: string[] = [];
   if (notices.worktree?.path) {
@@ -111,12 +100,12 @@ export function composeWorktreeNotices(notices: WorktreeNotices): string[] {
   return lines;
 }
 
-/** PDF staging (#33) follows the session onto its worktree. */
+
 export function resolveStagingRoot(worktreePath: string | undefined, directory: string): string {
   return worktreePath ?? directory;
 }
 
-/** First-turn-only emission gate: labels ride once, never replayed. */
+
 export function pendingFirstTurnNotices(
   sessionNotices: readonly string[] | undefined,
   previousTranscriptFingerprints: readonly string[],
@@ -163,11 +152,7 @@ export const defaultWorktreeVcs: WorktreeVcs = {
   },
 };
 
-/**
- * Purge-only-provably-empty orphans (decision 2): anything missing,
- * dirty, diverged, or failing the check is kept. Never throws —
- * the shutdown path must not fail because cleanup did.
- */
+
 export async function purgeWorktreeIfEmpty(
   vcs: WorktreeVcs,
   worktree: ManagedWorktree | undefined,

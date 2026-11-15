@@ -9,11 +9,7 @@ function stableJson(value: unknown): string {
   return `{${entries.map(([key, child]) => `${JSON.stringify(key)}:${stableJson(child)}`).join(",")}}`;
 }
 
-/**
- * Stable identity for exact notification replay suppression.
- * A view cursor may be shared by multiple distinct notification methods or
- * payloads, so the cursor alone is not an event identity.
- */
+
 export function notificationCursorKey(notification: {
   method: string;
   params?: Record<string, unknown>;

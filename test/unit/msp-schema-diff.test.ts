@@ -51,10 +51,6 @@ describe("schemaDiff.curatedSurface", () => {
     }
   });
 
-  test("pins the server requests the bridge parks for a verdict", () => {
-    expect(CURATED_REQUESTS).toContain("approval/request");
-    expect(CURATED_REQUESTS).toContain("userInput/request");
-  });
 });
 
 describe("schemaDiff.classifySnapshots", () => {

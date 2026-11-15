@@ -32,12 +32,6 @@ import {
   resolveToolBackend,
   type ToolBackend,
 } from "./msp/tool-backend.js";
-import {
-  APPROVAL_MODE_ENV,
-  APPROVAL_MODE_OPTION,
-  resolveApprovalMode,
-  type ApprovalModeSetting,
-} from "./msp/approval-mode.js";
 type ProviderEditor = Parameters<Parameters<Plugin.Context["provider"]["transform"]>[0]>[0];
 
 export type MuseProviderContext = Pick<Plugin.Context, "provider" | "session" | "aisdk" | "options"> & {
@@ -51,21 +45,20 @@ export interface SessionManagerBase {
   museBin?: string;
   contributorMode: ContributorMode;
   toolBackend: ToolBackend;
-  approvalMode: ApprovalModeSetting;
 }
 
 export interface ProviderPluginDependencies {
   fetchCatalog?: (directory: string) => Promise<MuseCatalogSnapshot>;
   createSessionManager?: (base: SessionManagerBase) => MuseSessionManager;
-  /** Binary under test; defaults to the host default ("muse"). */
+  
   museBin?: string;
-  /** Overrides the `serve --help` probe; the default runs the real CLI. */
+  
   serveHelpRunner?: ServeHelpRunner;
-  /** Bounds how long setup waits for the live catalog before falling back. Defaults to 15s. */
+  
   setupRefreshTimeoutMs?: number;
 }
 
-/** Upper bound on delaying provider readiness for live catalog discovery. */
+
 export const SETUP_REFRESH_TIMEOUT_MS = 15_000;
 
 export interface MuseProviderRuntime {
@@ -86,8 +79,8 @@ function providerInfo(moduleUrl: string): Provider.Info {
 }
 
 async function fetchMuseCatalog(directory: string, contributorMode: ContributorMode): Promise<MuseCatalogSnapshot> {
-  // model/list bills nothing; the lane flag rides along so every serve child
-  // the plugin starts agrees on the requested lane.
+  
+  
   const host = await MspHost.start({
     args: [...baseServeArgs("meta", contributorMode), "--disable-shell", "--disable-write"],
     cwd: directory,
@@ -102,48 +95,39 @@ async function fetchMuseCatalog(directory: string, contributorMode: ContributorM
   }
 }
 
-/** Register the disabled offline row first, then refresh only from a live MSP provider catalog. */
+
 export async function createProviderPlugin(
   ctx: MuseProviderContext,
   moduleUrl: string,
   dependencies: ProviderPluginDependencies = {},
 ): Promise<MuseProviderRuntime> {
-  // Billing lane (#29): an explicit plugin option wins, then the namespaced
-  // env var, otherwise the documented default (on, like the Muse TUI).
-  // Anything else fails closed before any serve child starts.
+  
+  
+  
   const contributorMode = resolveContributorMode(
     ctx.options?.[CONTRIBUTOR_MODE_OPTION] ?? process.env[CONTRIBUTOR_MODE_ENV],
   );
   const museBin = dependencies.museBin;
   await assertContributorFlagSupported(museBin ?? "muse", dependencies.serveHelpRunner);
-  // Tool backend (#37): an explicit plugin option wins, then the namespaced
-  // env var, otherwise the vetted default ("muse"). Anything else fails
-  // closed before any serve child starts. Process-wide: request.model
-  // carries only id/provider/variant, so per-model options are not settable.
+  
+  
+  
+  
   const toolBackend = resolveToolBackend(
     ctx.options?.[TOOL_BACKEND_OPTION] ?? process.env[TOOL_BACKEND_ENV],
   );
-  // Approval mode: an explicit plugin option wins, then the namespaced env
-  // var, otherwise the vetted default ("onRequest"). "host-default" omits
-  // approvalMode from session/start so the user's Muse permission profile
-  // applies instead of being silently overridden. Anything else fails closed
-  // before any serve child starts. The opencode backend ignores it (#37).
-  const approvalMode = resolveApprovalMode(
-    ctx.options?.[APPROVAL_MODE_OPTION] ?? process.env[APPROVAL_MODE_ENV],
-  );
+  
+  
+  
+  
+  
   if (toolBackend === "opencode") {
-    console.warn("opencode-muse: OpenCode tools backend is enabled (OPENCODE_MUSE_TOOL_BACKEND=opencode): Muse runs host-provided tools through the loopback bridge; OpenCode permissions apply. Approval review: #37.");
-  } else if (approvalMode !== "onRequest") {
-    console.warn(
-      approvalMode === "host-default"
-        ? "opencode-muse: Muse-backend sessions omit approvalMode (OPENCODE_MUSE_APPROVAL_MODE=host-default): the Muse host's configured permission profile applies."
-        : `opencode-muse: Muse-backend sessions select approvalMode "${approvalMode}" (OPENCODE_MUSE_APPROVAL_MODE).`,
-    );
+    console.warn("opencode-muse: OpenCode tools backend is enabled (OPENCODE_MUSE_TOOL_BACKEND=opencode): Muse runs host-provided tools through the loopback bridge; OpenCode permissions apply.");
   }
   const paygNotice = paygBillingNotice();
   if (paygNotice) console.warn(`opencode-muse: ${paygNotice}`);
-  // The lane below is requested from our own spawn args, never confirmed by
-  // the server (Meta exposes no lane signal); `muse usage` is the evidence.
+  
+  
   console.warn(
     `opencode-muse: serve hosts request the ${contributorMode === "on" ? "Contributor" : "Standard"} billing lane (--contributor-mode ${contributorMode}).`,
   );
@@ -156,7 +140,6 @@ export async function createProviderPlugin(
     museBin,
     contributorMode,
     toolBackend,
-    approvalMode,
   };
   const sessions = dependencies.createSessionManager?.(managerBase) ?? new MuseSessionManager(managerBase);
   const registration = await ctx.provider.transform((providers: ProviderEditor) => {
@@ -189,15 +172,6 @@ export async function createProviderPlugin(
         resolveSession: (context, options) => sessions.resolveSession(context, options),
         forkSessionAtBoundary: (sessionID, retainedLength) => sessions.forkSessionAtBoundary(sessionID, retainedLength),
         previousTranscriptFingerprints: (sessionID) => sessions.previousTranscriptFingerprints(sessionID),
-        consumeRecoveryDecision: (sessionID, text, directory) => sessions.consumeRecoveryDecision(sessionID, text, directory),
-        settleApprovalResponses: (sessionID, responses) => sessions.settleApprovalResponses(sessionID, responses),
-        hasParkedApprovals: (sessionID) => sessions.hasParkedApprovals(sessionID),
-        disarmParkedJoin: (sessionID) => sessions.disarmParkedJoin(sessionID),
-        consumeConversationalAnswer: (sessionID, text) => sessions.consumeConversationalAnswer(sessionID, text),
-        describeCurrentUserInputQuestion: (sessionID) => sessions.describeCurrentUserInputQuestion(sessionID),
-        consumeConversationalVerdict: (sessionID, text) => sessions.consumeConversationalVerdict(sessionID, text),
-        describePendingApproval: (sessionID, approvalId, requirementId) =>
-          sessions.describePendingApproval(sessionID, approvalId, requirementId),
       }, input.model.modelID);
     }, { providerID: MUSE_PROVIDER_ID });
     localMetaRegistrations.push(await ctx.session.hook("title", async (input) => {
@@ -214,7 +188,7 @@ export async function createProviderPlugin(
   } catch (error) {
     await sessions.close();
     await registration.dispose();
-    // The session hook may have been registered before the language hook failed.
+    
     await sessionHookRegistration?.dispose();
     await languageHookRegistration?.dispose();
     await Promise.all(localMetaRegistrations.map((hook) => hook.dispose()));
@@ -222,8 +196,8 @@ export async function createProviderPlugin(
   }
 
   let disposed = false;
-  // PDF staging retention (#33): every workspace that received a staged
-  // PDF is purged on dispose. Crash orphans are documented manual cleanup.
+  
+  
   const pdfStagingDirs = new Set<string>();
   const refreshTask = new Promise<void>((resolve) => setTimeout(resolve, 0)).then(() => {
     if (disposed) return false;
@@ -237,9 +211,9 @@ export async function createProviderPlugin(
     );
   });
 
-  // Wait for live discovery (bounded) so consumers never see the pre-refresh
-  // fallback. On timeout or failure the disabled placeholder stays in place
-  // and a late refresh still replaces it via provider.reload().
+  
+  
+  
   const refreshTimeoutMs = dependencies.setupRefreshTimeoutMs ?? SETUP_REFRESH_TIMEOUT_MS;
   let refreshTimer: ReturnType<typeof setTimeout> | undefined;
   try {

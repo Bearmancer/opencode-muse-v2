@@ -179,7 +179,7 @@ export class CatalogCache {
     const previousModels = this.currentModels;
     const previousIndex = this.currentSelectionIndex;
     const previousLive = this.live;
-    // Transform callbacks read this cache, so mutate it before provider.reload().
+    
     this.currentModels = models;
     this.currentSelectionIndex = index;
     this.live = true;

@@ -73,7 +73,7 @@ export interface SessionRegistryOptions extends ResolveStateDirectoryOptions {
   now?: () => number;
 }
 
-/** Resolve existing path components while retaining a normalized not-yet-created suffix. */
+
 function canonicalPath(path: string, platform: NodeJS.Platform | "win32"): string {
   const pathApi = platform === "win32" ? win32 : posix;
   if (platform !== process.platform) return pathApi.resolve(path);
@@ -91,7 +91,7 @@ function canonicalPath(path: string, platform: NodeJS.Platform | "win32"): strin
     try {
       stats = lstatSync(candidate);
     } catch (error) {
-      // A missing component ends filesystem traversal; normalize the remaining suffix lexically.
+      
       if (isMissingFile(error)) return pathApi.resolve(current, ...remaining);
       throw new RegistryValidationError();
     }
@@ -128,7 +128,7 @@ function canonicalPath(path: string, platform: NodeJS.Platform | "win32"): strin
   return pathApi.resolve(current);
 }
 
-/** Refuse a caller-selected state root inside Muse's CLI-owned config directory. */
+
 export function assertSafeStateDirectory(path: string, options: ResolveStateDirectoryOptions = {}): string {
   const env = options.env ?? process.env;
   const homeDirectory = options.homeDirectory ?? homedir();
@@ -258,7 +258,7 @@ function syncDirectory(path: string): void {
     descriptor = openSync(path, "r");
     fsyncSync(descriptor);
   } catch {
-    // Some platforms do not permit fsync on a directory handle.
+    
   } finally {
     if (descriptor !== undefined) closeSync(descriptor);
   }
@@ -323,11 +323,7 @@ export class SessionRegistry {
     });
   }
 
-  /**
-   * Every valid registry entry, without touching unrelated files: corrupt
-   * entries are skipped, never quarantined, so a scan cannot move another
-   * session's state aside. Used only for OpenCode-fork adoption matching.
-   */
+  
   async list(): Promise<SessionRegistryEntry[]> {
     let names: string[];
     try {
@@ -447,11 +443,7 @@ export class SessionRegistry {
     this.write({ ...entry, pendingCommands, updatedAt: this.now() });
   }
 
-  /**
-   * Drop the whole entry: the stuck turn is abandoned and the Muse linkage
-   * with it, so the next resolve starts a fresh session. A missing entry is
-   * already the desired end state.
-   */
+  
   async deleteEntry(openCodeSessionId: string, workspaceFingerprint: string): Promise<void> {
     const entry = await this.get(openCodeSessionId, workspaceFingerprint);
     if (!entry) return;
@@ -497,9 +489,9 @@ export class SessionRegistry {
       syncDirectory(this.directory);
     } catch {
       if (descriptor !== undefined) {
-        try { closeSync(descriptor); } catch { /* preserve the original storage failure */ }
+        try { closeSync(descriptor); } catch {  }
       }
-      try { unlinkSync(temporary); } catch { /* best-effort temp cleanup */ }
+      try { unlinkSync(temporary); } catch {  }
       throw new RegistryStorageError();
     }
   }

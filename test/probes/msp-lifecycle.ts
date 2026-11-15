@@ -137,7 +137,7 @@ async function probeSessionRename(connection: Connection, sessionId: string, nam
     if (failure.code === -32603 && failure.message?.includes("session naming is unavailable")) {
       return "runtime-unavailable";
     }
-    // Muse CLI 1.4.14 reports unavailable rename as -32030 commandRejected.
+    
     if (failure.code === -32030) {
       return "runtime-unavailable";
     }
@@ -241,8 +241,8 @@ try {
     event.method === "turn/started" && event.params.sessionId === sessionId && event.params.turnId === turnId,
   ).length;
 
-  // session/start auto-subscribes at its returned view head. Explicit
-  // view/subscribe is only used after detaching, to replay an older cursor.
+  
+  
   stage = "view-unsubscribe-resubscribe";
   await connection.request("view/unsubscribe", { sessionId });
   const subscribeReplayStart = notifications.events.length;

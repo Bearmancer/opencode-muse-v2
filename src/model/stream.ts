@@ -6,17 +6,6 @@ import {
 } from "../errors.js";
 import type { MspNotification } from "../msp/client.js";
 import { notificationCursorKey } from "../msp/notification.js";
-import {
-  approvalStageKey,
-  renderConversationalApprovalPrompt,
-  type ApprovalSubjectInfo,
-  type ConversationalChoice,
-} from "../msp/approvals.js";
-import {
-  presentableQuestion,
-  renderConversationalQuestionPrompt,
-  type UserInputQuestion,
-} from "../msp/user-input.js";
 
 export interface FlatMuseUsage {
   inputTokens: number | undefined;
@@ -25,14 +14,7 @@ export interface FlatMuseUsage {
   reasoningTokens: number | undefined;
 }
 
-/**
- * Bridge usage to the V3 contract, the single funnel for every finish part
- * and result the bridge emits. The nested token objects must always exist —
- * OpenCode reads `inputTokens.total` directly, so a missing object crashes
- * the turn with "undefined is not an object". Totals stay undefined when
- * unobserved (synthetic turns bill nothing); only the containers are
- * guaranteed.
- */
+
 export function resultUsage(usage: FlatMuseUsage | undefined): LanguageModelV3Usage {
   return {
     inputTokens: {
@@ -70,7 +52,7 @@ function terminalFinishReason(terminal: string): "stop" | "error" | "other" {
   return "other";
 }
 
-/** Maps typed Muse view facts to text/reasoning-only V3 events and safe usage. */
+
 export class MuseStreamMapper {
   private readonly itemKinds = new Map<string, string>();
   private readonly itemStarted = new Set<string>();
@@ -87,17 +69,7 @@ export class MuseStreamMapper {
   terminal?: string;
   failure?: Error;
 
-  constructor(
-    readonly turnId: string,
-    private readonly emittedApprovals: Set<string> = new Set(),
-    private readonly approvalChoices?: (
-      approvalId: string,
-      requirementId: string,
-    ) => { choices: ConversationalChoice[]; toolName?: string; subject?: ApprovalSubjectInfo; rawArgs?: string; reviewerReason?: string } | undefined,
-    private readonly userInputQuestion?: (
-      userInputId: string,
-    ) => { question: UserInputQuestion; toolName?: string } | undefined,
-  ) {}
+  constructor(readonly turnId: string) {}
 
   get generatedText(): string {
     return this.textParts.map((part) => part.text).join("");
@@ -151,59 +123,11 @@ export class MuseStreamMapper {
         return this.turnCompleted(params);
       case "bridge/tool-parked":
         return this.toolParkedEvent(params);
-      case "approval/requested":
-        return this.approvalRequestedEvent(params);
-      case "userInput/requested":
-        return this.userInputRequestedEvent(params);
       default:
         return [];
     }
   }
 
-  private approvalRequestedEvent(params: Record<string, unknown>): MuseStreamPart[] {
-    const approvalId = params.approvalId;
-    const toolCallId = params.toolCallId;
-    if (typeof approvalId !== "string" || typeof toolCallId !== "string") return [];
-    // The notification carries the wire requirement object; resolve it to
-    // the same canonical stage key the exchange parked, or the lookup
-    // misses and every real approval renders the choiceless notice.
-    const requirementId = approvalStageKey(approvalId, params.currentRequirementId) ?? "";
-    const stageKey = `${approvalId} ${requirementId}`;
-    if (this.emittedApprovals.has(stageKey)) return [];
-    this.emittedApprovals.add(stageKey);
-    // A parked approval ends the OpenCode turn with a conversational prompt
-    // instead of a part core drops. The verdict arrives as the next user
-    // message; the parked turn resumes once it is decided.
-    const described = this.approvalChoices?.(approvalId, requirementId);
-    const choices = described?.choices ?? [];
-    const toolName = described?.toolName ?? (typeof params.toolName === "string" ? params.toolName : undefined);
-    const prompt = choices.length > 0
-      ? renderConversationalApprovalPrompt({
-          toolName,
-          choices,
-          attempt: 0,
-          subject: described?.subject,
-          rawArgs: described?.rawArgs,
-          reviewerReason: described?.reviewerReason,
-        })
-      : `**Approval needed** (opencode-muse bridge message, not the model): Muse requested approval${toolName ? ` to run \`${toolName}\`` : ""} but offered no presentable options; the parked turn denies on timeout. Re-prompt to try again.`;
-    const itemId = `approval-${approvalId}`;
-    this.textParts.push({ type: "text", text: prompt });
-    return [
-      { type: "text-start", id: itemId },
-      { type: "text-delta", id: itemId, delta: prompt },
-      { type: "text-end", id: itemId },
-      this.finishPart("stop", "approval-parked"),
-    ];
-  }
-
-  /**
-   * A parked loopback call becomes one native OpenCode tool-call part,
-   * addressed by the loopback call id so the later tool result resolves the
-   * same parked call without a lookup table. The turn stays open server-side
-   * (parked), so the stream ends here: core executes, then re-invokes with
-   * the result on the next call, which attaches to the live turn.
-   */
   private toolParkedEvent(params: Record<string, unknown>): MuseStreamPart[] {
     const callId = params.mcpCallId;
     const toolName = params.toolName;
@@ -220,34 +144,6 @@ export class MuseStreamMapper {
     return [
       { type: "tool-call", toolCallId: callId, toolName, input },
       this.finishPart("stop", "tool-call-parked"),
-    ];
-  }
-
-  private userInputRequestedEvent(params: Record<string, unknown>): MuseStreamPart[] {
-    const userInputId = params.userInputId;
-    if (typeof userInputId !== "string") return [];
-    if (this.emittedApprovals.has(userInputId)) return [];
-    this.emittedApprovals.add(userInputId);
-    // A parked question ends the OpenCode turn with a conversational prompt
-    // instead of hanging. The answer arrives as the next user message; the
-    // parked turn resumes once every question is answered or cancelled.
-    // Prefer the event's own questions (no registration race), falling back
-    // to the exchange lookup for the oldest unanswered presentable question.
-    const eventQuestions = Array.isArray(params.questions) ? params.questions : [];
-    const described = this.userInputQuestion?.(userInputId);
-    const question = (eventQuestions.length > 0 ? presentableQuestion(eventQuestions[0]) : null)
-      ?? described?.question;
-    const toolName = described?.toolName ?? (typeof params.toolName === "string" ? params.toolName : undefined);
-    const prompt = question !== undefined && question !== null
-      ? renderConversationalQuestionPrompt({ toolName, question, attempt: 0 })
-      : `**Question** (opencode-muse bridge message, not the model): Muse asked a question${toolName ? ` while running \`${toolName}\`` : ""} but offered no usable options; the parked turn cancels on timeout. Re-prompt to try again.`;
-    const itemId = `user-input-${userInputId}`;
-    this.textParts.push({ type: "text", text: prompt });
-    return [
-      { type: "text-start", id: itemId },
-      { type: "text-delta", id: itemId, delta: prompt },
-      { type: "text-end", id: itemId },
-      this.finishPart("stop", "userinput-parked"),
     ];
   }
 
@@ -386,8 +282,8 @@ export class MuseStreamMapper {
   private finishPart(unified: "stop" | "error" | "other", raw: string): MuseStreamPart {
     this.finishWasSent = true;
     this.currentFinishReason = { unified, raw };
-    // Verbatim pass-through to OpenCode: always nested V3 containers, even
-    // when nothing was observed (totals stay undefined).
+    
+    
     return {
       type: "finish",
       finishReason: this.currentFinishReason,

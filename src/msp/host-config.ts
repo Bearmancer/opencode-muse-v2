@@ -2,22 +2,11 @@ import { existsSync, lstatSync, mkdirSync, readdirSync, rmSync, statSync, symlin
 import { homedir } from "node:os";
 import { isAbsolute, join, win32 } from "node:path";
 
-/**
- * Per-session private Muse config for the opencode tool backend (#37).
- * Bridge-authored `settings.json` only (system prompt, toolset, foreign
- * context and compaction guards); the user's `auth.json` is symlinked in
- * when present so the login keeps working. Nothing under the user's real
- * Muse config dir is opened, parsed, copied, or logged — the symlink is a
- * pointer the plugin never reads through.
- */
+
 
 const SESSION_KEY_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:@+_-]{0,511}$/;
 
-/**
- * The user's real Muse config dir (never read or written by the plugin —
- * only used as the `auth.json` symlink source). Mirrors the state-dir
- * resolution, but for configuration roots.
- */
+
 export function userMuseConfigDir(options: {
   env?: NodeJS.ProcessEnv;
   homeDirectory?: string;
@@ -41,7 +30,7 @@ export interface BridgeSettingsInput {
   toolset: string[];
 }
 
-/** Bridge-authored settings: our prompt and tools only, no user content. */
+
 export function buildBridgeSettings(input: BridgeSettingsInput): Record<string, unknown> {
   return {
     schema_version: 1,
@@ -54,12 +43,7 @@ export function buildBridgeSettings(input: BridgeSettingsInput): Record<string, 
   };
 }
 
-/**
- * Write a private `XDG_CONFIG_HOME/<sessionKey>/muse` dir holding only
- * bridge-authored settings, with `auth.json` symlinked from the user's real
- * Muse config dir when it exists. Returns the XDG dir to export. Throws on
- * unsafe session keys; never reads file contents.
- */
+
 export function writeHostConfig(
   stateDirectory: string,
   sessionKey: string,
@@ -89,22 +73,18 @@ export function writeHostConfig(
     try {
       if (lstatSync(link, { throwIfNoEntry: false })?.isSymbolicLink()) rmSync(link, { force: true });
     } catch {
-      // Leave a non-link occupant alone rather than replacing user data.
+      
     }
     try {
       symlinkSync(authSource, link);
     } catch {
-      // A racing writer owns the link; the login still resolves through it.
+      
     }
   }
   return xdg;
 }
 
-/**
- * Remove host config dirs older than `olderThanMs` (crashed-process
- * leftovers). Fresh entries may belong to a live sibling process, so they
- * are never touched. Returns the removed session keys.
- */
+
 export function sweepHostConfigs(
   stateDirectory: string,
   olderThanMs: number,
@@ -136,7 +116,7 @@ export function sweepHostConfigs(
       rmSync(path, { recursive: true, force: true });
       removed.push(name);
     } catch {
-      // A live sibling may hold the dir; leave it for the next sweep.
+      
     }
   }
   return removed;
@@ -149,10 +129,5 @@ const defaultSystemPrompt = [
   "Wait for each tool call to return before continuing the turn.",
 ].join("\n");
 
-/**
- * Default toolset: the whole loopback namespace. Per-turn tool names do not
- * exist yet when the config is written, so only a namespace glob admits the
- * bridge (probe precedent: server `probe` serves `mcp__probe__*`). An empty
- * allowlist gates every tool off — native and loopback alike.
- */
+
 const defaultToolset: string[] = ["mcp__opencode_loopback__*"];

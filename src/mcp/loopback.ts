@@ -21,26 +21,14 @@ export interface LoopbackMcpOptions {
   tools: LoopbackToolDefinition[];
   onParked?: (call: ParkedCall) => void;
   toolTimeoutMs?: number;
-  /** Bound on settled ids remembered for duplicate suppression (default 1000). */
+  
   maxSettledIds?: number;
 }
 
-/**
- * Upper bound on settled call ids remembered for duplicate suppression.
- * Sessions never park this many calls; the cap only bites in a runaway, and
- * insertion order makes the trim first-in-first-out.
- */
+
 const MAX_SETTLED_CALL_IDS = 1000;
 
-/**
- * OpenCode tools as an in-process loopback MCP server (streamable HTTP,
- * Pi's parked-call shape). One instance per Muse session: its own path and
- * Bearer [REDACTED] A tool call's HTTP request stays open until the bridge resolves
- * the parked call with the OpenCode tool result, so the server never times
- * requests out; Muse's own tool timeout is configured in the session's
- * bridge-authored settings. Closing the server rejects every parked call —
- * a dead bridge never leaves Muse waiting silently.
- */
+
 export class LoopbackMcpServer {
   readonly token: string;
   private readonly sessionKey: string;
@@ -56,13 +44,7 @@ export class LoopbackMcpServer {
   private readonly parkedQueue: ParkedCall[] = [];
   private readonly parkedWaiters = new Set<(call: ParkedCall) => void>();
   private readonly maxSettledIds: number;
-  /**
-   * Settled ids: resolved, timed out, failed, or torn down. A late duplicate
-   * (slow tool result, history resend) reads as settled and is skipped;
-   * only an id never parked reads as unknown. Survives across turns because
-   * retained history resends old results; bounded FIFO so a session cannot
-   * grow it without limit.
-   */
+  
   private readonly resolvedIds = new Set<string>();
   private server?: Server;
   private listening?: Promise<number>;
@@ -109,20 +91,17 @@ export class LoopbackMcpServer {
     return this.pending.size;
   }
 
-  /** Replace the served tool list (synced from OpenCode's forwarded tools). */
+  
   setTools(tools: LoopbackToolDefinition[]): void {
     this.tools = tools.map((tool) => ({ ...tool }));
   }
 
-  /** Next queued parked call, if any. */
+  
   takeParked(): ParkedCall | undefined {
     return this.parkedQueue.shift();
   }
 
-  /**
-   * Wait for the next parked call without removing it; the consumer still
-   * takes it. A synchronously queued call resolves immediately.
-   */
+  
   watchParked(): { wait: Promise<ParkedCall>; cancel(): void } {
     const queued = this.parkedQueue[0];
     if (queued) return { wait: Promise.resolve(queued), cancel: () => {} };
@@ -169,11 +148,7 @@ export class LoopbackMcpServer {
     return true;
   }
 
-  /**
-   * Drop a queued entry that will never be consumed (timeout, failure):
-   * leaving the corpse would surface it later as a live tool call for an
-   * id the bridge no longer holds.
-   */
+  
   private evictQueued(callId: string): void {
     const index = this.parkedQueue.findIndex((parked) => parked.callId === callId);
     if (index >= 0) this.parkedQueue.splice(index, 1);
@@ -199,8 +174,8 @@ export class LoopbackMcpServer {
       this.rememberSettled(callId);
       parked.reject(new Error("Loopback MCP server closed with the call still parked."));
     }
-    // Let rejected calls answer their HTTP requests before tearing down:
-    // destroying the socket first would leave MCP clients hanging.
+    
+    
     const inflight = [...this.inflight];
     if (inflight.length > 0) {
       await Promise.race([
@@ -212,12 +187,12 @@ export class LoopbackMcpServer {
     this.server = undefined;
     this.listening = undefined;
     if (!server) return;
-    // Destroy remaining connections: a parked tool call holds its HTTP
-    // request open, and server.close would wait for it forever.
+    
+    
     try {
       server.closeAllConnections?.();
     } catch {
-      // Best effort; the close below still runs.
+      
     }
     await new Promise<void>((resolve) => {
       server.close(() => resolve());
@@ -283,14 +258,14 @@ export class LoopbackMcpServer {
             try {
               notify(parked);
             } catch {
-              // A throwing waiter must not break the parked call.
+              
             }
           }
           this.parkedWaiters.clear();
           try {
             this.onParked?.(parked);
           } catch {
-            // A throwing observer must not break the parked call.
+            
           }
         });
         return { content: [{ type: "text", text }] };

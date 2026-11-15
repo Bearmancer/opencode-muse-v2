@@ -67,7 +67,7 @@ describe("Contributor billing lane", () => {
       (caught: unknown) => caught,
     );
     expect(error).toBeInstanceOf(MuseInvalidConfigError);
-    // Raw spawn stderr must never leak into the message.
+    
     expect((error as Error).message).not.toContain("ENOENT");
   });
 

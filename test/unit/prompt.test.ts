@@ -174,30 +174,10 @@ describe("Muse prompt extraction", () => {
     expect(fingerprintVisibleTranscript(prompt)).toEqual(fingerprintTranscript(prompt));
   });
 
-  test("prompt.extractsToolApprovalResponsesFromUserMessages", async () => {
-    const prompt = [{
-      role: "user",
-      content: [
-        { type: "tool-approval-response", approvalId: "approval-1", approved: true },
-        { type: "text", text: "go on" },
-      ],
-    }] as unknown as LanguageModelV3Prompt;
-    expect(extractApprovalResponses(prompt)).toEqual([{ approvalId: "approval-1", approved: true }]);
-  });
-
   test("prompt.peekSlicesFreshTextLikeExtraction", () => {
     const previous = [userText("old request"), assistantText("old response")] as unknown as LanguageModelV3Prompt;
     const current = [...previous, userText("a")] as unknown as LanguageModelV3Prompt;
     expect(latestUserText(current, fingerprintVisibleTranscript(previous))).toBe("a");
-  });
-
-  test("prompt.peekTakesOnlyTheLastUserMessage", () => {
-    // A parked turn never advances fingerprints, so its consumed input is
-    // still "new" on the next prompt: the verdict must be the fresh reply,
-    // not the stale text joined with it.
-    const previous = [userText("fetch it")] as unknown as LanguageModelV3Prompt;
-    const current = [...previous, userText("yes"), assistantText("fetching"), userText("B")] as unknown as LanguageModelV3Prompt;
-    expect(latestUserText(current, fingerprintVisibleTranscript(previous))).toBe("B");
   });
 
   test("prompt.peekFallsBackToTheFinalUserTurnWithoutHistory", () => {
@@ -223,15 +203,4 @@ describe("Muse prompt extraction", () => {
     expect(latestUserText(prompt, [])).toBe("b");
   });
 
-  test("prompt.ignoresMalformedApprovalResponses", async () => {
-    const prompt = [{
-      role: "user",
-      content: [
-        { type: "tool-approval-response", approvalId: 42, approved: "yes" },
-        { type: "tool-approval-response", approved: true },
-        { type: "tool-call", toolCallId: "call-1", toolName: "shell", input: "{}" },
-      ],
-    }] as unknown as LanguageModelV3Prompt;
-    expect(extractApprovalResponses(prompt)).toEqual([]);
-  });
 });

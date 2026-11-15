@@ -20,7 +20,7 @@ export type MuseBridgeErrorCode =
   | "MUSE_APPROVAL_PENDING"
   | "MUSE_INVALID_CONFIG";
 
-/** Safe plugin error: never attach raw CLI stderr, MSP text, prompts, or payloads. */
+
 export class MuseBridgeError extends Error {
   constructor(
     readonly code: MuseBridgeErrorCode,

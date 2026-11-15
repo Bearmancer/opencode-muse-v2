@@ -20,10 +20,7 @@ function systemText(systemParts: readonly unknown[]): string {
     .join("\n");
 }
 
-/**
- * Forward only a custom agent's bounded prompt prefix. Stock OpenCode prompts,
- * tool catalogs, and unknown system layouts are never copied into Muse input.
- */
+
 export function extractAllowedAgentContext(agent: string, systemParts: readonly unknown[]): AgentContextResult {
   const system = systemText(systemParts);
   const identity = MODEL_IDENTITY_HEADING.exec(system);

@@ -1,8 +1,8 @@
-// A loopback Meta Responses endpoint for driving a real `muse serve`
-// offline: it records every request body and answers each from a script.
-// Pattern precedent: pi-muse-subscription test/fake-meta.ts (#42). No live
-// calls, no credentials; the harness points muse at this server through the
-// settings overlay's endpoint_transport.
+
+
+
+
+
 import { createServer, type Server } from "node:http";
 
 export type Json = Record<string, any>;
@@ -18,7 +18,7 @@ export interface Reply {
   calls?: { name: string; args: Json; id: string }[];
 }
 
-/** One model response as a Responses API event stream. */
+
 export function reply(r: Reply): string {
   let seq = 1;
   const out: string[] = [sse({ type: "response.created", sequence_number: seq++, response: frame("in_progress") })];
@@ -108,14 +108,14 @@ export class FakeMeta {
   }
 }
 
-/** The texts of a request's input items with the given role. */
+
 export function roleTexts(body: Json, role: string): string[] {
   return (body.input ?? [])
     .filter((i: Json) => i.role === role)
     .map((i: Json) => (typeof i.content === "string" ? i.content : (i.content ?? []).map((p: Json) => p.text ?? "").join("")));
 }
 
-/** The tool names a request offers, namespaced tools flattened to `ns/name`. */
+
 export function toolNames(body: Json): string[] {
   return (body.tools ?? []).flatMap((t: Json) => (t.type === "namespace" ? (t.tools ?? []).map((x: Json) => `${t.name}/${x.name}`) : [t.name ?? t.type]));
 }

@@ -1,10 +1,10 @@
-// Offline host-override probe (#42): drives a real `muse serve` with an
-// isolated HOME, a private XDG config (prompt/toolset override), and a fake
-// Meta endpoint. Zero live calls, no credentials, no real-config access.
-// Checks: (1) prompt/toolset override, one request per turn; (2) rawLog
-// all-calls + parked turn; (3) resume; (4) fork at an explicit cut point.
-// Usage: bun test/probes/msp-host-override.ts [--muse-bin PATH]
-// Exits 0 with a JSON summary on stdout, 1 with {ok:false,...} on failure.
+
+
+
+
+
+
+
 import { execFileSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -69,11 +69,11 @@ async function main(): Promise<void> {
   const cleanup = () => rmSync(root, { recursive: true, force: true });
   try {
     const home = join(root, "home");
-    // The host config dir must contain BOTH settings.json (below) and the
-    // auth.json written above: without auth.json in the private dir, muse
-    // ignores the endpoint overlay and fails with authRequired
-    // (bisected 2026-11-01). The auth file is probe-authored fake content,
-    // never a real credential.
+    
+    
+    
+    
+    
     const cwd = join(root, "workspace");
     mkdirSync(cwd, { recursive: true });
     execFileSync("git", ["init", "--quiet", "-b", "main", cwd]);
@@ -188,7 +188,7 @@ async function main(): Promise<void> {
           choiceId: choice.choiceId,
           requirementId: p.currentRequirementId,
         });
-      } catch { /* probe auto-approval is best-effort */ }
+      } catch {  }
     }
 
     async function startSession(connection: { command(m: string, p: Params): Promise<any> }): Promise<string> {
@@ -217,7 +217,7 @@ async function main(): Promise<void> {
       return { turnId: ack.turnId as string, fromIndex };
     }
 
-    // Checks 1+2 share one session: override on the first turn, rawLog on the second.
+    
     let sessionId = "";
     let firstTurnId = "";
     let secondTurnId = "";
@@ -226,7 +226,7 @@ async function main(): Promise<void> {
       try {
         assert(host.spawned.initializeResult.grantedCapabilities.includes("rawLog"), "rawLog", "rawLog capability not granted");
         sessionId = await startSession(host.connection);
-        // Check 1: prompt/toolset override, one request per turn.
+        
         fake.queue(() => reply({ text: "hello from muse" }));
         {
           const before = fake.bodies.length;
@@ -239,7 +239,7 @@ async function main(): Promise<void> {
           assert(developer.length < 4000, "override", `developer context too large (${developer.length} chars)`);
           assert(!developer.includes("skill-catalog"), "override", "Muse skill catalog leaked into context");
         }
-        // Check 2: rawLog all-calls + parked turn.
+        
         const streams = (await host.connection.command("log/streams", { sessionId })) as any;
         const stream = (streams.streams ?? []).map((s: any) => s.stream).find((s: any) => s?.kind === "session") ?? { kind: "session", id: sessionId };
         await host.connection.command("log/subscribe", { sessionId, stream });
@@ -281,7 +281,7 @@ async function main(): Promise<void> {
       }
     }
 
-    // Check 3: resume continues from Muse's own record.
+    
     {
       const host = await openHost();
       try {
@@ -297,7 +297,7 @@ async function main(): Promise<void> {
       }
     }
 
-    // Check 4: fork at the completed tool turn branches cleanly.
+    
     let forkId = "";
     let branchedTurnId = "";
     {
@@ -316,9 +316,9 @@ async function main(): Promise<void> {
       }
     }
 
-    // Check 4b: pre-fork turn ids must NOT survive a fork (anchors die with
-    // the fork, so the bridge drops them on re-point), while the fork's own
-    // new turns stay forkable (rewind chains keep working past the fork).
+    
+    
+    
     let forkOfFork = false;
     {
       const host = await openHost();
@@ -346,9 +346,9 @@ async function main(): Promise<void> {
       }
     }
 
-    // Check 5: steer into a parked turn. The MCP stub parks the tool call,
-    // so the turn stays open indefinitely; steer mid-park, release, and
-    // assert the steered text reaches the model in the same turn.
+    
+    
+    
     {
       const host = await openHost();
       try {
@@ -369,7 +369,7 @@ async function main(): Promise<void> {
           if (Date.now() > parkDeadline) fail("steer", "tool call never parked on the stub");
           try {
             if (readFileSync(parkedPath, "utf8").includes('"callId":"call_s"')) break;
-          } catch { /* stub has not logged yet */ }
+          } catch {  }
           await new Promise((r) => setTimeout(r, 200));
         }
         await host.connection.command("turn/steer", {

@@ -33,8 +33,8 @@ function visibleParts(content: unknown): Array<Record<string, string>> {
       const bytes = bytesForFileData(part.data);
       if (bytes !== undefined) result.push({ type: "file", mediaType: part.mediaType, digest: hash(bytes) });
     }
-    // Reasoning, tool calls/results, and system boilerplate are not visible
-    // user/assistant transcript lineage.
+    
+    
   }
   return result;
 }
